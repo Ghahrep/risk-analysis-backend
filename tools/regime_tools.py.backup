@@ -1,0 +1,1172 @@
+# tools/regime_tools.py - Enhanced with FMP Integration
+"""
+Market Regime Detection Tools - Integrated Architecture with FMP Data
+====================================================================
+
+HMM-based regime detection and volatility regime analysis.
+Enhanced with Financial Modeling Prep integration for real market data.
+"""
+
+import pandas as pd
+import numpy as np
+from typing import Dict, Any, Optional, List
+import warnings
+import logging
+from datetime import datetime
+
+warnings.filterwarnings('ignore', category=FutureWarning)
+warnings.filterwarnings('ignore', category=UserWarning, module='hmmlearn')
+logger = logging.getLogger(__name__)
+
+# FMP Data Integration
+try:
+    from data.utils.market_data_manager import MarketDataManager
+    HAS_FMP_INTEGRATION = True
+except ImportError:
+    HAS_FMP_INTEGRATION = False
+    logger.warning("FMP integration not available. Using synthetic data only.")
+
+# Optional dependencies with graceful fallbacks
+try:
+    from hmmlearn import hmm
+    HAS_HMM = True
+except ImportError:
+    HAS_HMM = False
+    logger.warning("hmmlearn not available - HMM functions disabled")
+
+try:
+    from .fractal_tools import calculate_hurst
+    HAS_FRACTAL_TOOLS = True
+except ImportError:
+    try:
+        from fractal_tools import calculate_hurst
+        HAS_FRACTAL_TOOLS = True
+    except ImportError:
+        HAS_FRACTAL_TOOLS = False
+        logger.warning("fractal_tools not available - Hurst regime analysis disabled")
+
+# Add helper function to get data manager
+def _get_data_manager():
+    """Get FMP data manager instance"""
+    if not HAS_FMP_INTEGRATION:
+        return None
+    return MarketDataManager()
+
+# ============================================================================
+# CORE REGIME DETECTION FUNCTIONS - ENHANCED WITH FMP INTEGRATION
+# ============================================================================
+
+def detect_hmm_regimes(
+    returns: pd.Series = None,
+    symbols: Optional[List[str]] = None,        # NEW: For FMP integration
+    use_real_data: bool = False,               # NEW: Enable FMP data
+    period: str = "2years",                    # NEW: Data period (longer for regime detection)
+    n_regimes: int = 2, 
+    max_iter: int = 1000,
+    random_state: int = 42,
+    covariance_type: str = "full"
+) -> Optional[Dict[str, Any]]:
+    """
+    ENHANCED: Detect market regimes using Gaussian HMM with FMP integration
+    
+    Parameters:
+    -----------
+    returns : pd.Series, optional
+        Return series for regime detection (backward compatibility)
+    symbols : List[str], optional
+        List of symbols for FMP data retrieval (NEW)
+    use_real_data : bool, default=False
+        Use real market data via FMP (NEW)
+    period : str, default="2years"
+        Data period for real data - longer periods better for regime detection (NEW)
+    n_regimes : int, default=2
+        Number of regimes to detect
+    max_iter : int, default=1000
+        Maximum iterations for HMM fitting
+    random_state : int, default=42
+        Random seed for reproducibility
+    covariance_type : str, default="full"
+        HMM covariance type
+        
+    Returns:
+    --------
+    Optional[Dict[str, Any]]
+        Comprehensive regime detection results with data source tracking
+    """
+    try:
+        if not HAS_HMM:
+            return _error_regime_response("hmmlearn not available")
+        
+        data_source = "Unknown"
+        
+        # Handle FMP real data integration
+        if use_real_data and symbols and HAS_FMP_INTEGRATION:
+            data_manager = _get_data_manager()
+            if data_manager:
+                real_returns_data = data_manager.get_portfolio_returns(symbols, period=period)
+                if real_returns_data is not None:
+                    # Create equal-weighted portfolio returns or use single asset
+                    if len(symbols) == 1:
+                        returns = real_returns_data[symbols[0]]
+                    else:
+                        returns = real_returns_data.mean(axis=1)
+                    data_source = "Financial Modeling Prep"
+                    logger.info(f"Using FMP data for regime detection: {symbols} over {period}")
+                else:
+                    returns = _generate_synthetic_returns_single(symbols[0] if symbols else "SPY", days=504)
+                    data_source = "Synthetic (FMP failed)"
+                    logger.warning("FMP data retrieval failed, using synthetic data")
+            else:
+                returns = _generate_synthetic_returns_single(symbols[0] if symbols else "SPY", days=504)
+                data_source = "Synthetic (FMP unavailable)"
+        elif returns is not None:
+            data_source = "Provided"
+        else:
+            # Fallback to synthetic data
+            symbol = symbols[0] if symbols else "SPY"
+            returns = _generate_synthetic_returns_single(symbol, days=504)  # 2 years of data
+            data_source = "Generated Synthetic"
+        
+        if returns is None or returns.empty or len(returns) < window:
+            return _empty_regime_response("Insufficient data for volatility regime detection", data_source)
+        
+        # Calculate rolling volatility (annualized)
+        rolling_vol = returns.rolling(window).std() * np.sqrt(252)
+        
+        # Classify regimes
+        conditions = [
+            rolling_vol < threshold_low,
+            (rolling_vol >= threshold_low) & (rolling_vol <= threshold_high),
+            rolling_vol > threshold_high
+        ]
+        regime_labels = ['Low Volatility', 'Medium Volatility', 'High Volatility']
+        
+        vol_regimes = pd.Series(
+            np.select(conditions, regime_labels, default='Unknown'),
+            index=rolling_vol.index,
+            name='volatility_regime'
+        )
+        
+        # Calculate regime statistics
+        regime_statistics = {}
+        for regime_label in regime_labels:
+            regime_mask = vol_regimes == regime_label
+            if regime_mask.sum() > 0:
+                regime_returns = returns[regime_mask]
+                regime_vol = rolling_vol[regime_mask]
+                
+                regime_statistics[regime_label] = {
+                    'frequency': float(regime_mask.sum() / len(vol_regimes.dropna())),
+                    'avg_return': float(regime_returns.mean()),
+                    'avg_volatility': float(regime_vol.mean()),
+                    'return_volatility': float(regime_returns.std() * np.sqrt(252)),
+                    'sharpe_ratio': float(regime_returns.mean() / regime_returns.std() * np.sqrt(252)) if regime_returns.std() > 0 else 0.0,
+                    'max_drawdown': float(_calculate_max_drawdown(regime_returns)),
+                    'observations': int(regime_mask.sum())
+                }
+        
+        # Current regime analysis
+        current_regime = str(vol_regimes.dropna().iloc[-1]) if len(vol_regimes.dropna()) > 0 else "Unknown"
+        current_volatility = float(rolling_vol.dropna().iloc[-1]) if len(rolling_vol.dropna()) > 0 else 0.0
+        
+        # Regime transition analysis
+        transition_analysis = _analyze_volatility_regime_transitions(vol_regimes)
+        
+        return {
+            'success': True,
+            'analysis_type': 'volatility_regime_detection',
+            'data_source': data_source,  # NEW: Track data source
+            'data_period': period if use_real_data else None,  # NEW: Track period used
+            'symbols_analyzed': symbols if symbols else None,  # NEW: Track symbols
+            'regime_series': vol_regimes.dropna(),
+            'regime_statistics': regime_statistics,
+            'current_regime': current_regime,
+            'current_volatility': current_volatility,
+            'thresholds': {
+                'low': threshold_low,
+                'high': threshold_high,
+                'window': window
+            },
+            'transition_analysis': transition_analysis,
+            'analysis_timestamp': datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Volatility regime detection failed: {e}")
+        return {
+            'success': False,
+            'error': str(e),
+            'analysis_type': 'volatility_regime_detection',
+            'data_source': data_source,
+            'regime_series': pd.Series(),
+            'regime_statistics': {},
+            'current_regime': 'Unknown',
+            'analysis_timestamp': datetime.now().isoformat()
+        }
+
+def comprehensive_regime_analysis(
+    returns: pd.Series = None,
+    symbols: Optional[List[str]] = None,        # NEW: For FMP integration
+    use_real_data: bool = False,               # NEW: Enable FMP data
+    period: str = "2years",                    # NEW: Data period (longer for comprehensive analysis)
+    include_hmm: bool = True,
+    include_volatility: bool = True,
+    include_transitions: bool = True,
+    include_returns_analysis: bool = True,
+    include_shift_detection: bool = False,
+    hmm_config: Optional[Dict[str, Any]] = None,
+    volatility_config: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """
+    ENHANCED: Comprehensive market regime analysis combining all methods with FMP integration
+    
+    Parameters:
+    -----------
+    returns : pd.Series, optional
+        Return series for comprehensive regime analysis (backward compatibility)
+    symbols : List[str], optional
+        List of symbols for FMP data retrieval (NEW)
+    use_real_data : bool, default=False
+        Use real market data via FMP (NEW)
+    period : str, default="2years"
+        Data period for real data - longer periods better for regime analysis (NEW)
+    include_hmm : bool, default=True
+        Include HMM regime detection
+    include_volatility : bool, default=True
+        Include volatility regime analysis
+    include_transitions : bool, default=True
+        Include transition probability analysis
+    include_returns_analysis : bool, default=True
+        Include regime-conditional return analysis
+    include_shift_detection : bool, default=False
+        Include regime shift detection
+    hmm_config : Optional[Dict[str, Any]], default=None
+        HMM configuration parameters
+    volatility_config : Optional[Dict[str, Any]], default=None
+        Volatility regime configuration parameters
+        
+    Returns:
+    --------
+    Dict[str, Any]
+        Comprehensive regime analysis results with data source tracking
+    """
+    try:
+        data_source = "Unknown"
+        
+        # Handle FMP real data integration
+        if use_real_data and symbols and HAS_FMP_INTEGRATION:
+            data_manager = _get_data_manager()
+            if data_manager:
+                real_returns_data = data_manager.get_portfolio_returns(symbols, period=period)
+                if real_returns_data is not None:
+                    # Create equal-weighted portfolio returns or use single asset
+                    if len(symbols) == 1:
+                        returns = real_returns_data[symbols[0]]
+                    else:
+                        returns = real_returns_data.mean(axis=1)
+                    data_source = "Financial Modeling Prep"
+                    logger.info(f"Using FMP data for comprehensive regime analysis: {symbols} over {period}")
+                else:
+                    returns = _generate_synthetic_returns_single(symbols[0] if symbols else "SPY", days=504)
+                    data_source = "Synthetic (FMP failed)"
+            else:
+                returns = _generate_synthetic_returns_single(symbols[0] if symbols else "SPY", days=504)
+                data_source = "Synthetic (FMP unavailable)"
+        elif returns is not None:
+            data_source = "Provided"
+        else:
+            # Fallback to synthetic data
+            symbol = symbols[0] if symbols else "SPY"
+            returns = _generate_synthetic_returns_single(symbol, days=504)  # 2 years of data
+            data_source = "Generated Synthetic"
+        
+        if returns is None or returns.empty or len(returns) < 100:
+            return _empty_regime_response("Need at least 100 observations for comprehensive analysis", data_source)
+        
+        comprehensive_results = {
+            'success': True,
+            'analysis_type': 'comprehensive_regime_analysis',
+            'data_source': data_source,  # NEW: Track data source
+            'data_period': period if use_real_data else None,  # NEW: Track period used
+            'symbols_analyzed': symbols if symbols else None,  # NEW: Track symbols
+            'data_summary': {
+                'observations': len(returns),
+                'start_date': returns.index[0].strftime('%Y-%m-%d'),
+                'end_date': returns.index[-1].strftime('%Y-%m-%d'),
+                'return_statistics': {
+                    'mean': float(returns.mean()),
+                    'std': float(returns.std()),
+                    'skewness': float(returns.skew()),
+                    'kurtosis': float(returns.kurtosis())
+                }
+            },
+            'analysis_timestamp': datetime.now().isoformat()
+        }
+        
+        # HMM Analysis
+        if include_hmm:
+            hmm_params = hmm_config or {}
+            # Don't pass FMP parameters again since we already have the returns
+            hmm_results = detect_hmm_regimes(returns=returns, **hmm_params)
+            comprehensive_results['hmm_analysis'] = hmm_results
+            
+            # Transition probability analysis
+            if include_transitions and hmm_results and hmm_results.get('success', False):
+                transition_results = forecast_regime_transition_probability(hmm_results)
+                comprehensive_results['transition_forecasts'] = transition_results
+        
+        # Volatility Regime Analysis
+        if include_volatility:
+            vol_params = volatility_config or {}
+            # Don't pass FMP parameters again since we already have the returns
+            vol_results = detect_volatility_regimes(returns=returns, **vol_params)
+            comprehensive_results['volatility_analysis'] = vol_results
+        
+        # Regime-Conditional Return Analysis
+        if include_returns_analysis:
+            if include_hmm and comprehensive_results.get('hmm_analysis', {}).get('success', False):
+                hmm_return_analysis = analyze_regime_conditional_returns(
+                    returns, comprehensive_results['hmm_analysis']
+                )
+                comprehensive_results['hmm_conditional_returns'] = hmm_return_analysis
+            
+            if include_volatility and comprehensive_results.get('volatility_analysis', {}).get('success', False):
+                vol_return_analysis = analyze_regime_conditional_returns(
+                    returns, comprehensive_results['volatility_analysis']
+                )
+                comprehensive_results['volatility_conditional_returns'] = vol_return_analysis
+        
+        # Regime Shift Detection
+        if include_shift_detection:
+            shift_results = detect_regime_shifts(returns)
+            comprehensive_results['shift_detection'] = shift_results
+        
+        # Integrated Assessment
+        integrated_assessment = _create_integrated_regime_assessment(comprehensive_results)
+        comprehensive_results['integrated_assessment'] = integrated_assessment
+        
+        return comprehensive_results
+        
+    except Exception as e:
+        logger.error(f"Comprehensive regime analysis failed: {e}")
+        return _error_regime_response(str(e), data_source)
+
+# ============================================================================
+# HELPER FUNCTIONS - ENHANCED FOR FMP INTEGRATION
+# ============================================================================
+
+def _generate_synthetic_returns_single(symbol: str, days: int = 252) -> pd.Series:
+    """Generate synthetic returns for a single symbol"""
+    np.random.seed(42)  # Reproducible results
+    
+    dates = pd.date_range(end='today', periods=days, freq='D')
+    
+    # Asset-specific characteristics for regime detection
+    if symbol in ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA']:
+        # Tech stocks - more volatile regimes
+        mean_return = 0.0008
+        volatility = 0.025
+        # Add regime switching behavior
+        regime_switch_prob = 0.02
+        returns = []
+        current_regime = 0  # 0 = normal, 1 = high vol
+        
+        for i in range(days):
+            if np.random.random() < regime_switch_prob:
+                current_regime = 1 - current_regime
+            
+            if current_regime == 0:
+                # Normal regime
+                ret = np.random.normal(mean_return, volatility)
+            else:
+                # High volatility regime
+                ret = np.random.normal(mean_return * 0.5, volatility * 2.0)
+            returns.append(ret)
+        
+        returns = np.array(returns)
+        
+    elif symbol in ['TLT', 'AGG', 'BND']:
+        # Bonds - lower volatility, different regimes
+        mean_return = 0.0003
+        volatility = 0.008
+        returns = np.random.normal(mean_return, volatility, days)
+    else:
+        # Default market behavior with regime switching
+        mean_return = 0.0006
+        volatility = 0.018
+        regime_switch_prob = 0.015
+        returns = []
+        current_regime = 0
+        
+        for i in range(days):
+            if np.random.random() < regime_switch_prob:
+                current_regime = 1 - current_regime
+            
+            if current_regime == 0:
+                # Bull regime
+                ret = np.random.normal(mean_return * 1.5, volatility * 0.8)
+            else:
+                # Bear regime
+                ret = np.random.normal(mean_return * -0.5, volatility * 1.5)
+            returns.append(ret)
+        
+        returns = np.array(returns)
+    
+    return pd.Series(returns, index=dates, name=f'{symbol}_returns')
+
+def get_regime_tools_integration_status() -> Dict[str, Any]:
+    """
+    Get integration status for regime tools with FMP
+    
+    Returns:
+        Dictionary with integration status and available functions
+    """
+    return {
+        "fmp_integration_available": HAS_FMP_INTEGRATION,
+        "integrated_functions": [
+            "detect_hmm_regimes",
+            "detect_volatility_regimes", 
+            "comprehensive_regime_analysis",
+            "forecast_regime_transition_probability",
+            "analyze_regime_conditional_returns"
+        ],
+        "integration_parameters": {
+            "use_real_data": "bool - Enable FMP data integration",
+            "symbols": "List[str] - Symbols for real data retrieval",
+            "period": "str - Data period (1month, 3months, 1year, 2years, 5years)"
+        },
+        "supported_data_sources": [
+            "Financial Modeling Prep (Real)",
+            "Synthetic (Fallback)",
+            "Provided (User data)"
+        ],
+        "dependencies": {
+            "hmmlearn": HAS_HMM,
+            "fractal_tools": HAS_FRACTAL_TOOLS
+        }
+    }
+
+# ============================================================================
+# EXISTING FUNCTIONS - UNCHANGED FOR BACKWARD COMPATIBILITY
+# ============================================================================
+
+def forecast_regime_transition_probability(
+    hmm_results: Dict[str, Any],
+    forecast_horizon: int = 21
+) -> Optional[Dict[str, Any]]:
+    """
+    MAIN: Forecast regime transition probabilities over multiple horizons
+    """
+    try:
+        if not hmm_results.get('success', False):
+            return _error_regime_response("Invalid HMM results provided")
+        
+        transition_matrix = np.array(hmm_results['transition_matrix'])
+        current_regime = hmm_results['current_regime']
+        regime_characteristics = hmm_results['regime_characteristics']
+        
+        if transition_matrix.size == 0:
+            return _error_regime_response("Empty transition matrix")
+        
+        # Multi-step transition probabilities
+        transition_forecasts = []
+        
+        for step in range(1, min(forecast_horizon + 1, 65)):  # Cap at 64 steps for computational efficiency
+            try:
+                multi_step_matrix = np.linalg.matrix_power(transition_matrix, step)
+                step_probabilities = multi_step_matrix[current_regime, :]
+                
+                # Find most likely regime and calculate regime stability
+                most_likely_regime = int(np.argmax(step_probabilities))
+                regime_stability = float(step_probabilities[current_regime])
+                transition_entropy = float(-np.sum(step_probabilities * np.log(step_probabilities + 1e-10)))
+                
+                transition_forecasts.append({
+                    'step': step,
+                    'regime_probabilities': step_probabilities.tolist(),
+                    'most_likely_regime': most_likely_regime,
+                    'probability_current_regime': regime_stability,
+                    'transition_entropy': transition_entropy,
+                    'regime_characteristics': {
+                        regime: {
+                            'probability': float(prob),
+                            'expected_return': regime_characteristics[regime]['mean_return'],
+                            'expected_volatility': regime_characteristics[regime]['volatility']
+                        }
+                        for regime, prob in enumerate(step_probabilities)
+                    }
+                })
+                
+            except Exception as e:
+                logger.warning(f"Failed to calculate {step}-step transition: {e}")
+                continue
+        
+        if not transition_forecasts:
+            return _error_regime_response("Failed to generate transition forecasts")
+        
+        # Calculate steady-state probabilities
+        eigenvalues, eigenvectors = np.linalg.eig(transition_matrix.T)
+        steady_state_idx = np.argmax(np.real(eigenvalues))
+        steady_state_probs = np.real(eigenvectors[:, steady_state_idx])
+        steady_state_probs = steady_state_probs / steady_state_probs.sum()
+        
+        return {
+            'success': True,
+            'analysis_type': 'regime_transition_forecast',
+            'current_regime_info': {
+                'regime_index': current_regime,
+                'regime_characteristics': regime_characteristics[current_regime]
+            },
+            'transition_forecasts': transition_forecasts,
+            'steady_state_probabilities': steady_state_probs.tolist(),
+            'forecast_summary': {
+                'max_horizon': len(transition_forecasts),
+                'long_term_most_likely': int(np.argmax(steady_state_probs)),
+                'regime_persistence': float(transition_matrix[current_regime, current_regime])
+            },
+            'analysis_timestamp': datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Regime transition forecasting failed: {e}")
+        return _error_regime_response(str(e))
+
+def analyze_regime_conditional_returns(
+    returns: pd.Series,
+    regime_results: Dict[str, Any],
+    confidence_levels: List[float] = [0.05, 0.25, 0.5, 0.75, 0.95]
+) -> Dict[str, Any]:
+    """
+    MAIN: Analyze return distributions conditional on market regimes
+    """
+    try:
+        if not regime_results.get('success', False):
+            return _error_regime_response("Invalid regime results provided")
+        
+        regime_series = regime_results.get('regime_series', pd.Series())
+        if regime_series.empty:
+            return _empty_regime_response("No regime series available")
+        
+        # Align returns and regimes
+        aligned_data = pd.concat([returns, regime_series], axis=1).dropna()
+        if len(aligned_data) < 30:
+            return _empty_regime_response("Insufficient aligned data")
+        
+        aligned_returns = aligned_data.iloc[:, 0]
+        aligned_regimes = aligned_data.iloc[:, 1]
+        
+        # Analyze returns for each regime
+        regime_return_analysis = {}
+        unique_regimes = aligned_regimes.unique()
+        
+        for regime in unique_regimes:
+            regime_mask = aligned_regimes == regime
+            regime_returns = aligned_returns[regime_mask]
+            
+            if len(regime_returns) < 10:  # Minimum observations for meaningful analysis
+                continue
+            
+            # Calculate regime-specific statistics
+            regime_stats = {
+                'observations': len(regime_returns),
+                'frequency': float(len(regime_returns) / len(aligned_returns)),
+                'mean_return': float(regime_returns.mean()),
+                'return_std': float(regime_returns.std()),
+                'annualized_return': float(regime_returns.mean() * 252),
+                'annualized_volatility': float(regime_returns.std() * np.sqrt(252)),
+                'sharpe_ratio': float(regime_returns.mean() / regime_returns.std() * np.sqrt(252)) if regime_returns.std() > 0 else 0.0,
+                'skewness': float(regime_returns.skew()),
+                'kurtosis': float(regime_returns.kurtosis()),
+                'max_return': float(regime_returns.max()),
+                'min_return': float(regime_returns.min())
+            }
+            
+            # Calculate quantiles
+            quantiles = {}
+            for conf_level in confidence_levels:
+                quantiles[f'q_{int(conf_level * 100)}'] = float(regime_returns.quantile(conf_level))
+            
+            regime_stats['return_quantiles'] = quantiles
+            
+            # VaR and CVaR calculations
+            var_95 = float(regime_returns.quantile(0.05))
+            var_99 = float(regime_returns.quantile(0.01))
+            cvar_95 = float(regime_returns[regime_returns <= var_95].mean()) if np.sum(regime_returns <= var_95) > 0 else var_95
+            cvar_99 = float(regime_returns[regime_returns <= var_99].mean()) if np.sum(regime_returns <= var_99) > 0 else var_99
+            
+            regime_stats['risk_metrics'] = {
+                'var_95': var_95,
+                'var_99': var_99,
+                'cvar_95': cvar_95,
+                'cvar_99': cvar_99
+            }
+            
+            regime_return_analysis[str(regime)] = regime_stats
+        
+        # Cross-regime comparison
+        regime_comparison = _generate_regime_comparison(regime_return_analysis)
+        
+        return {
+            'success': True,
+            'analysis_type': 'regime_conditional_returns',
+            'regime_return_analysis': regime_return_analysis,
+            'regime_comparison': regime_comparison,
+            'data_summary': {
+                'total_observations': len(aligned_returns),
+                'regimes_analyzed': len(regime_return_analysis),
+                'analysis_period': {
+                    'start': aligned_returns.index[0].strftime('%Y-%m-%d'),
+                    'end': aligned_returns.index[-1].strftime('%Y-%m-%d')
+                }
+            },
+            'analysis_timestamp': datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Regime conditional return analysis failed: {e}")
+        return _error_regime_response(str(e))
+
+def detect_regime_shifts(
+    returns: pd.Series,
+    detection_method: str = "volatility_breakpoint",
+    window: int = 60,
+    significance_threshold: float = 0.05
+) -> Dict[str, Any]:
+    """
+    MAIN: Detect structural breaks and regime shifts in return series
+    """
+    try:
+        if len(returns) < window * 2:
+            return _empty_regime_response(f"Insufficient data - need {window * 2}, have {len(returns)}")
+        
+        regime_shifts = {
+            'success': True,
+            'analysis_type': 'regime_shift_detection',
+            'detection_method': detection_method,
+            'breakpoints': [],
+            'regime_periods': [],
+            'shift_statistics': {},
+            'analysis_timestamp': datetime.now().isoformat()
+        }
+        
+        # Detect breakpoints based on method
+        if detection_method in ["volatility_breakpoint", "combined"]:
+            vol_breakpoints = _detect_volatility_breakpoints(returns, window, significance_threshold)
+            regime_shifts['breakpoints'].extend(vol_breakpoints)
+        
+        if detection_method in ["mean_breakpoint", "combined"]:
+            mean_breakpoints = _detect_mean_breakpoints(returns, window, significance_threshold)
+            regime_shifts['breakpoints'].extend(mean_breakpoints)
+        
+        # Remove duplicates and sort
+        regime_shifts['breakpoints'] = sorted(list(set(regime_shifts['breakpoints'])))
+        
+        # Create regime periods
+        if regime_shifts['breakpoints']:
+            regime_periods = _create_regime_periods(returns, regime_shifts['breakpoints'])
+            regime_shifts['regime_periods'] = regime_periods
+            
+            # Calculate regime shift statistics
+            shift_stats = _calculate_shift_statistics(returns, regime_shifts['breakpoints'])
+            regime_shifts['shift_statistics'] = shift_stats
+        
+        return regime_shifts
+        
+    except Exception as e:
+        logger.error(f"Regime shift detection failed: {e}")
+        return _error_regime_response(str(e))
+
+# ============================================================================
+# INTERNAL HELPER FUNCTIONS - UNCHANGED
+# ============================================================================
+
+def _get_regime_description(volatility: float, mean_return: float) -> str:
+    """Generate regime description based on characteristics"""
+    if volatility < 0.15:
+        vol_desc = "LowVol"
+    elif volatility > 0.25:
+        vol_desc = "HighVol"
+    else:
+        vol_desc = "MedVol"
+    
+    if mean_return > 0.001:
+        return_desc = "Bull"
+    elif mean_return < -0.001:
+        return_desc = "Bear"
+    else:
+        return_desc = "Neutral"
+    
+    return f"{return_desc}{vol_desc}"
+
+def _calculate_regime_persistence(regime_series: pd.Series) -> Dict[str, Any]:
+    """Calculate regime persistence metrics"""
+    try:
+        # Find regime changes
+        regime_changes = regime_series != regime_series.shift(1)
+        regime_groups = regime_changes.cumsum()
+        
+        # Calculate durations for each regime
+        regime_durations = {}
+        for regime in regime_series.unique():
+            regime_mask = regime_series == regime
+            regime_group_ids = regime_groups[regime_mask].unique()
+            
+            durations = []
+            for group_id in regime_group_ids:
+                duration = (regime_groups == group_id).sum()
+                durations.append(duration)
+            
+            if durations:
+                regime_durations[str(regime)] = {
+                    'avg_duration': float(np.mean(durations)),
+                    'median_duration': float(np.median(durations)),
+                    'max_duration': int(np.max(durations)),
+                    'min_duration': int(np.min(durations)),
+                    'episodes': len(durations)
+                }
+        
+        total_changes = int((regime_series != regime_series.shift(1)).sum() - 1)
+        avg_duration = float(len(regime_series) / max(total_changes, 1))
+        
+        return {
+            'regime_durations': regime_durations,
+            'total_regime_changes': total_changes,
+            'average_regime_duration': avg_duration
+        }
+        
+    except Exception as e:
+        return {'error': f"Persistence calculation failed: {str(e)}"}
+
+def _analyze_volatility_regime_transitions(vol_regimes: pd.Series) -> Dict[str, Any]:
+    """Analyze volatility regime transitions"""
+    try:
+        # Create transition matrix
+        regime_labels = ['Low Volatility', 'Medium Volatility', 'High Volatility']
+        vol_regimes_clean = vol_regimes.dropna()
+        
+        if len(vol_regimes_clean) < 2:
+            return {'error': 'Insufficient data for transition analysis'}
+        
+        # Count transitions
+        transitions = {}
+        for i in range(len(vol_regimes_clean) - 1):
+            current = vol_regimes_clean.iloc[i]
+            next_regime = vol_regimes_clean.iloc[i + 1]
+            
+            if current not in transitions:
+                transitions[current] = {}
+            if next_regime not in transitions[current]:
+                transitions[current][next_regime] = 0
+            
+            transitions[current][next_regime] += 1
+        
+        # Convert to probabilities
+        transition_probabilities = {}
+        for from_regime in transitions:
+            total_transitions = sum(transitions[from_regime].values())
+            transition_probabilities[from_regime] = {
+                to_regime: count / total_transitions 
+                for to_regime, count in transitions[from_regime].items()
+            }
+        
+        return {
+            'transition_counts': transitions,
+            'transition_probabilities': transition_probabilities
+        }
+        
+    except Exception as e:
+        return {'error': f"Transition analysis failed: {str(e)}"}
+
+def _calculate_max_drawdown(returns: pd.Series) -> float:
+    """Calculate maximum drawdown for a return series"""
+    try:
+        if returns.empty:
+            return 0.0
+        
+        cumulative = (1 + returns).cumprod()
+        running_max = cumulative.expanding().max()
+        drawdown = (cumulative - running_max) / running_max
+        return float(drawdown.min())
+        
+    except Exception:
+        return 0.0
+
+def _generate_regime_comparison(regime_analysis: Dict[str, Any]) -> Dict[str, Any]:
+    """Generate cross-regime comparison statistics"""
+    try:
+        if not regime_analysis:
+            return {}
+        
+        # Extract metrics for comparison
+        regimes = list(regime_analysis.keys())
+        metrics = ['mean_return', 'return_std', 'sharpe_ratio', 'skewness', 'kurtosis']
+        
+        comparison = {}
+        for metric in metrics:
+            values = []
+            for regime in regimes:
+                if metric in regime_analysis[regime]:
+                    values.append(regime_analysis[regime][metric])
+            
+            if values:
+                comparison[metric] = {
+                    'min': float(np.min(values)),
+                    'max': float(np.max(values)),
+                    'range': float(np.max(values) - np.min(values)),
+                    'regime_ranking': {
+                        regime: float(regime_analysis[regime][metric]) 
+                        for regime in regimes 
+                        if metric in regime_analysis[regime]
+                    }
+                }
+        
+        # Risk-adjusted return ranking
+        if 'sharpe_ratio' in comparison:
+            best_sharpe_regime = max(comparison['sharpe_ratio']['regime_ranking'].items(), key=lambda x: x[1])
+            comparison['best_risk_adjusted_regime'] = {
+                'regime': best_sharpe_regime[0],
+                'sharpe_ratio': best_sharpe_regime[1]
+            }
+        
+        return comparison
+        
+    except Exception as e:
+        return {'error': f"Regime comparison failed: {str(e)}"}
+
+def _detect_volatility_breakpoints(returns: pd.Series, window: int, threshold: float) -> List[int]:
+    """Detect volatility breakpoints using rolling variance tests"""
+    try:
+        rolling_vol = returns.rolling(window).std()
+        vol_changes = rolling_vol.pct_change().abs()
+        
+        # Simple breakpoint detection: large changes in volatility
+        breakpoint_threshold = vol_changes.quantile(1 - threshold)
+        breakpoints = vol_changes[vol_changes > breakpoint_threshold].index
+        
+        # Convert to integer positions
+        return [returns.index.get_loc(bp) for bp in breakpoints if bp in returns.index]
+        
+    except Exception:
+        return []
+
+def _detect_mean_breakpoints(returns: pd.Series, window: int, threshold: float) -> List[int]:
+    """Detect mean return breakpoints"""
+    try:
+        rolling_mean = returns.rolling(window).mean()
+        mean_changes = rolling_mean.diff().abs()
+        
+        # Simple breakpoint detection: large changes in mean
+        breakpoint_threshold = mean_changes.quantile(1 - threshold)
+        breakpoints = mean_changes[mean_changes > breakpoint_threshold].index
+        
+        # Convert to integer positions
+        return [returns.index.get_loc(bp) for bp in breakpoints if bp in returns.index]
+        
+    except Exception:
+        return []
+
+def _create_regime_periods(returns: pd.Series, breakpoints: List[int]) -> List[Dict[str, Any]]:
+    """Create regime periods from breakpoints"""
+    try:
+        periods = []
+        start_idx = 0
+        
+        for i, breakpoint in enumerate(sorted(breakpoints)):
+            if breakpoint > start_idx and breakpoint < len(returns):
+                period_returns = returns.iloc[start_idx:breakpoint]
+                
+                periods.append({
+                    'regime_id': i,
+                    'start_idx': start_idx,
+                    'end_idx': breakpoint - 1,
+                    'start_date': period_returns.index[0].strftime('%Y-%m-%d'),
+                    'end_date': period_returns.index[-1].strftime('%Y-%m-%d'),
+                    'duration_days': len(period_returns),
+                    'mean_return': float(period_returns.mean()),
+                    'volatility': float(period_returns.std()),
+                    'observations': len(period_returns)
+                })
+                
+                start_idx = breakpoint
+        
+        # Add final period
+        if start_idx < len(returns):
+            final_period = returns.iloc[start_idx:]
+            periods.append({'regime_id': len(breakpoints),
+                'start_idx': start_idx,
+                'end_idx': len(returns) - 1,
+                'start_date': final_period.index[0].strftime('%Y-%m-%d'),
+                'end_date': final_period.index[-1].strftime('%Y-%m-%d'),
+                'duration_days': len(final_period),
+                'mean_return': float(final_period.mean()),
+                'volatility': float(final_period.std()),
+                'observations': len(final_period)
+            })
+        
+        return periods
+        
+    except Exception as e:
+        return [{'error': f"Period creation failed: {str(e)}"}]
+
+def _calculate_shift_statistics(returns: pd.Series, breakpoints: List[int]) -> Dict[str, Any]:
+    """Calculate statistics for regime shifts"""
+    try:
+        if not breakpoints:
+            return {'no_shifts_detected': True}
+        
+        shift_stats = {
+            'total_shifts': len(breakpoints),
+            'shift_frequency': len(breakpoints) / len(returns),
+            'average_time_between_shifts': len(returns) / (len(breakpoints) + 1),
+            'shift_details': []
+        }
+        
+        # Analyze each shift
+        for i, shift_point in enumerate(breakpoints):
+            if shift_point > 30 and shift_point < len(returns) - 30:  # Need buffer for analysis
+                before_period = returns.iloc[max(0, shift_point-30):shift_point]
+                after_period = returns.iloc[shift_point:min(len(returns), shift_point+30)]
+                
+                if len(before_period) > 0 and len(after_period) > 0:
+                    shift_stats['shift_details'].append({
+                        'shift_index': i,
+                        'shift_date': returns.index[shift_point].strftime('%Y-%m-%d'),
+                        'return_change': float(after_period.mean() - before_period.mean()),
+                        'volatility_change': float(after_period.std() - before_period.std()),
+                        'significance': 'high' if abs(after_period.mean() - before_period.mean()) > before_period.std() else 'moderate'
+                    })
+        
+        return shift_stats
+        
+    except Exception as e:
+        return {'error': f"Shift statistics calculation failed: {str(e)}"}
+
+def _create_integrated_regime_assessment(results: Dict[str, Any]) -> Dict[str, Any]:
+    """Create integrated assessment from all regime analysis results"""
+    try:
+        assessment = {
+            'regime_consistency': 'unknown',
+            'current_regime_consensus': 'unknown',
+            'confidence_level': 0.0,
+            'key_findings': []
+        }
+        
+        # Check HMM results
+        hmm_current = None
+        if results.get('hmm_analysis', {}).get('success', False):
+            hmm_current = results['hmm_analysis'].get('current_regime')
+            assessment['key_findings'].append(f"HMM detected current regime: {hmm_current}")
+        
+        # Check volatility results  
+        vol_current = None
+        if results.get('volatility_analysis', {}).get('success', False):
+            vol_current = results['volatility_analysis'].get('current_regime')
+            assessment['key_findings'].append(f"Current volatility regime: {vol_current}")
+        
+        # Assess consensus
+        if hmm_current is not None and vol_current is not None:
+            if str(hmm_current).lower() in str(vol_current).lower() or str(vol_current).lower() in str(hmm_current).lower():
+                assessment['regime_consistency'] = 'high'
+                assessment['confidence_level'] = 0.8
+            else:
+                assessment['regime_consistency'] = 'mixed'
+                assessment['confidence_level'] = 0.5
+        elif hmm_current is not None or vol_current is not None:
+            assessment['regime_consistency'] = 'partial'
+            assessment['confidence_level'] = 0.6
+        
+        # Set consensus regime
+        if hmm_current is not None:
+            assessment['current_regime_consensus'] = str(hmm_current)
+        elif vol_current is not None:
+            assessment['current_regime_consensus'] = str(vol_current)
+        
+        return assessment
+        
+    except Exception as e:
+        return {'error': f"Integrated assessment failed: {str(e)}"}
+
+# ============================================================================
+# ERROR HANDLING FUNCTIONS - ENHANCED WITH DATA SOURCE TRACKING  
+# ============================================================================
+
+def _error_regime_response(error_message: str, data_source: str = "Unknown") -> Dict[str, Any]:
+    """Standard error response for regime analysis functions"""
+    return {
+        'success': False,
+        'error': error_message,
+        'analysis_type': 'regime_analysis_error',
+        'data_source': data_source,  # NEW: Track data source
+        'regime_series': pd.Series(),
+        'regime_characteristics': {},
+        'current_regime': None,
+        'analysis_timestamp': datetime.now().isoformat()
+    }
+
+def _empty_regime_response(message: str, data_source: str = "Unknown") -> Dict[str, Any]:
+    """Standard empty response for insufficient data scenarios"""
+    return {
+        'success': False,
+        'error': f"Insufficient data: {message}",
+        'analysis_type': 'regime_analysis_empty',
+        'data_source': data_source,  # NEW: Track data source
+        'regime_series': pd.Series(),
+        'regime_characteristics': {},
+        'current_regime': None,
+        'analysis_timestamp': datetime.now().isoformat()
+    } None or len(returns) < n_regimes * 25:
+            return _empty_regime_response(f"Insufficient data - need {n_regimes * 25}, have {len(returns) if returns is not None else 0}", data_source)
+        
+        returns_clean = returns.dropna()
+        if len(returns_clean) < 50:
+            return _empty_regime_response("Insufficient clean data for regime detection", data_source)
+        
+        # Prepare feature matrix
+        feature_matrix = returns_clean.values.reshape(-1, 1)
+        
+        # Fit HMM model
+        model = hmm.GaussianHMM(
+            n_components=n_regimes, 
+            covariance_type=covariance_type, 
+            n_iter=max_iter,
+            random_state=random_state
+        )
+        
+        try:
+            model.fit(feature_matrix)
+        except Exception as e:
+            logger.warning(f"HMM fitting failed: {e}")
+            return _error_regime_response(f"HMM model fitting failed: {str(e)}", data_source)
+        
+        # Predict regimes
+        hidden_states = model.predict(feature_matrix)
+        
+        # Standardize regime labels by volatility (your established pattern)
+        regime_volatilities = [np.sqrt(model.covars_[i][0][0]) for i in range(n_regimes)]
+        vol_sorted_indices = np.argsort(regime_volatilities)
+        
+        # Create mapping from arbitrary to sorted labels
+        label_map = {old_label: new_label for new_label, old_label in enumerate(vol_sorted_indices)}
+        standardized_states = np.array([label_map[s] for s in hidden_states])
+        
+        # Create regime series
+        regime_series = pd.Series(standardized_states, index=returns_clean.index, name='hmm_regime')
+        
+        # Extract regime characteristics (sorted by volatility)
+        regime_characteristics = {}
+        for i in range(n_regimes):
+            original_index = vol_sorted_indices[i]
+            mean_return = float(model.means_[original_index][0])
+            volatility = float(np.sqrt(model.covars_[original_index][0][0]))
+            
+            # Calculate additional regime statistics
+            regime_mask = standardized_states == i
+            regime_returns = returns_clean.values[regime_mask]
+            
+            regime_characteristics[i] = {
+                'mean_return': mean_return,
+                'volatility': volatility,
+                'annualized_return': mean_return * 252,
+                'annualized_volatility': volatility * np.sqrt(252),
+                'frequency': float(np.sum(regime_mask) / len(standardized_states)),
+                'sharpe_ratio': float(mean_return / volatility) if volatility > 0 else 0.0,
+                'skewness': float(pd.Series(regime_returns).skew()) if len(regime_returns) > 3 else 0.0,
+                'kurtosis': float(pd.Series(regime_returns).kurtosis()) if len(regime_returns) > 3 else 0.0,
+                'regime_label': f"Regime_{i}_{_get_regime_description(volatility, mean_return)}"
+            }
+        
+        # Reorder transition matrix
+        transition_matrix = model.transmat_[np.ix_(vol_sorted_indices, vol_sorted_indices)]
+        
+        # Calculate regime persistence metrics
+        persistence_metrics = _calculate_regime_persistence(regime_series)
+        
+        return {
+            'success': True,
+            'analysis_type': 'hmm_regime_detection',
+            'data_source': data_source,  # NEW: Track data source
+            'data_period': period if use_real_data else None,  # NEW: Track period used
+            'symbols_analyzed': symbols if symbols else None,  # NEW: Track symbols
+            'regime_series': regime_series,
+            'regime_characteristics': regime_characteristics,
+            'transition_matrix': transition_matrix.tolist(),
+            'current_regime': int(regime_series.iloc[-1]),
+            'model_diagnostics': {
+                'model_score': float(model.score(feature_matrix)),
+                'n_regimes': n_regimes,
+                'convergence': model.monitor_.converged,
+                'n_iterations': model.monitor_.iter
+            },
+            'persistence_metrics': persistence_metrics,
+            'analysis_timestamp': datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"HMM regime detection failed: {e}")
+        return _error_regime_response(str(e), data_source)
+
+def detect_volatility_regimes(
+    returns: pd.Series = None,
+    symbols: Optional[List[str]] = None,        # NEW: For FMP integration
+    use_real_data: bool = False,               # NEW: Enable FMP data
+    period: str = "1year",                     # NEW: Data period
+    window: int = 30,
+    threshold_low: float = 0.15,
+    threshold_high: float = 0.25
+) -> Dict[str, Any]:
+    """
+    ENHANCED: Volatility-based regime detection using rolling standard deviation with FMP integration
+    
+    Parameters:
+    -----------
+    returns : pd.Series, optional
+        Return series for analysis (backward compatibility)
+    symbols : List[str], optional
+        List of symbols for FMP data retrieval (NEW)
+    use_real_data : bool, default=False
+        Use real market data via FMP (NEW)
+    period : str, default="1year"
+        Data period for real data (NEW)
+    window : int, default=30
+        Rolling window for volatility calculation
+    threshold_low : float, default=0.15
+        Lower threshold for low volatility regime (annualized)
+    threshold_high : float, default=0.25
+        Upper threshold for high volatility regime (annualized)
+        
+    Returns:
+    --------
+    Dict[str, Any]
+        Volatility regime analysis results with data source tracking
+    """
+    try:
+        data_source = "Unknown"
+        
+        # Handle FMP real data integration
+        if use_real_data and symbols and HAS_FMP_INTEGRATION:
+            data_manager = _get_data_manager()
+            if data_manager:
+                real_returns_data = data_manager.get_portfolio_returns(symbols, period=period)
+                if real_returns_data is not None:
+                    # Create equal-weighted portfolio returns or use single asset
+                    if len(symbols) == 1:
+                        returns = real_returns_data[symbols[0]]
+                    else:
+                        returns = real_returns_data.mean(axis=1)
+                    data_source = "Financial Modeling Prep"
+                    logger.info(f"Using FMP data for volatility regime detection: {symbols}")
+                else:
+                    returns = _generate_synthetic_returns_single(symbols[0] if symbols else "SPY")
+                    data_source = "Synthetic (FMP failed)"
+            else:
+                returns = _generate_synthetic_returns_single(symbols[0] if symbols else "SPY")
+                data_source = "Synthetic (FMP unavailable)"
+        elif returns is not None:
+            data_source = "Provided"
+        else:
+            # Fallback to synthetic data
+            symbol = symbols[0] if symbols else "SPY"
+            returns = _generate_synthetic_returns_single(symbol)
+            data_source = "Generated Synthetic"
+        
+        if returns is

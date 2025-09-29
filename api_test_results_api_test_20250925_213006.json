@@ -1,0 +1,242 @@
+{
+  "test_session_id": "api_test_20250925_213006",
+  "start_time": "2025-09-25T21:30:06.178308",
+  "total_tests": 8,
+  "passed_tests": 0,
+  "failed_tests": 8,
+  "critical_failures": 7,
+  "test_categories": {
+    "imports": {
+      "tests": {
+        "centralized_models": {
+          "success": false,
+          "details": {
+            "error": "cannot import name 'ForecastingRequest' from 'models.requests' (C:\\Users\\ghahr\\risk-analysis-backend\\models\\requests.py)",
+            "type": "ImportError"
+          },
+          "is_critical": true,
+          "timestamp": "2025-09-25T21:30:06.265123"
+        },
+        "api_endpoints": {
+          "success": false,
+          "details": {
+            "behavioral": {
+              "success": true,
+              "error": null
+            },
+            "portfolio": {
+              "success": true,
+              "error": null
+            },
+            "forecasting": {
+              "success": true,
+              "error": null
+            },
+            "risk": {
+              "success": false,
+              "error": "No module named 'api.endpoints.risk_analysis_fixed'"
+            }
+          },
+          "is_critical": true,
+          "timestamp": "2025-09-25T21:30:07.092245"
+        }
+      },
+      "passed": 0,
+      "failed": 2,
+      "critical_failures": 2
+    },
+    "models": {
+      "tests": {
+        "validation": {
+          "success": false,
+          "details": {
+            "behavioral_request": {
+              "success": true,
+              "error": null
+            },
+            "risk_request": {
+              "success": true,
+              "error": null
+            },
+            "portfolio_request": {
+              "success": false,
+              "error": "2 validation errors for PortfolioOptimizationRequest\nportfolio_id\n  Field required [type=missing, input_value={'symbols': ['AAPL', 'MSF..., 'use_real_data': True}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.11/v/missing\noptimization_method\n  Input should be 'max_sharpe', 'min_variance', 'equal_weight', 'max_return', 'risk_parity' or 'maximize_diversification' [type=enum, input_value='mean_variance', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.11/v/enum"
+            }
+          },
+          "is_critical": true,
+          "timestamp": "2025-09-25T21:30:07.096245"
+        }
+      },
+      "passed": 0,
+      "failed": 1,
+      "critical_failures": 1
+    },
+    "behavioral_api": {
+      "tests": {
+        "comprehensive_test": {
+          "success": false,
+          "details": {
+            "router_import": {
+              "success": true,
+              "error": null
+            },
+            "request_creation": {
+              "success": false,
+              "error": "1 validation error for BehavioralAnalysisRequest\nperiod\n  Input should be '1month', '3months', '6months', '1year', '2years', '3years' or '5years' [type=enum, input_value='6month', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.11/v/enum"
+            },
+            "service_instantiation": {
+              "success": true,
+              "error": null,
+              "service_status": "operational",
+              "behavioral_tools_available": true,
+              "fmp_available": true
+            }
+          },
+          "is_critical": true,
+          "timestamp": "2025-09-25T21:30:07.100256"
+        }
+      },
+      "passed": 0,
+      "failed": 1,
+      "critical_failures": 1
+    },
+    "portfolio_api": {
+      "tests": {
+        "comprehensive_test": {
+          "success": false,
+          "details": {
+            "router_import": {
+              "success": true,
+              "error": null
+            },
+            "request_creation": {
+              "success": false,
+              "error": "2 validation errors for PortfolioOptimizationRequest\nportfolio_id\n  Field required [type=missing, input_value={'symbols': ['AAPL', 'MSF..., 'use_real_data': True}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.11/v/missing\noptimization_method\n  Input should be 'max_sharpe', 'min_variance', 'equal_weight', 'max_return', 'risk_parity' or 'maximize_diversification' [type=enum, input_value='mean_variance', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.11/v/enum"
+            },
+            "service_availability": {
+              "success": false,
+              "error": "cannot import name 'PortfolioOptimizationService' from 'services.portfolio_service_fixed' (C:\\Users\\ghahr\\risk-analysis-backend\\services\\portfolio_service_fixed.py)"
+            }
+          },
+          "is_critical": true,
+          "timestamp": "2025-09-25T21:30:07.104245"
+        }
+      },
+      "passed": 0,
+      "failed": 1,
+      "critical_failures": 1
+    },
+    "forecasting_api": {
+      "tests": {
+        "comprehensive_test": {
+          "success": false,
+          "details": {
+            "import_error": {
+              "success": false,
+              "error": "cannot import name 'ForecastingRequest' from 'models.requests' (C:\\Users\\ghahr\\risk-analysis-backend\\models\\requests.py)"
+            }
+          },
+          "is_critical": true,
+          "timestamp": "2025-09-25T21:30:07.105245"
+        }
+      },
+      "passed": 0,
+      "failed": 1,
+      "critical_failures": 1
+    },
+    "risk_api": {
+      "tests": {
+        "comprehensive_test": {
+          "success": false,
+          "details": {
+            "router_import": {
+              "success": false,
+              "error": "Could not import risk router from any of: ['api.endpoints.risk_analysis_fixed', 'api.endpoints.fresh_risk_api', 'api.endpoints.risk_fixed']"
+            },
+            "request_creation": {
+              "success": true,
+              "error": null,
+              "symbols_count": 3,
+              "confidence_levels": [
+                0.95,
+                0.99
+              ]
+            },
+            "service_availability": {
+              "success": true,
+              "error": null,
+              "service_type": "RiskAnalysisService"
+            }
+          },
+          "is_critical": true,
+          "timestamp": "2025-09-25T21:30:07.108245"
+        }
+      },
+      "passed": 0,
+      "failed": 1,
+      "critical_failures": 1
+    },
+    "integration": {
+      "tests": {
+        "cross_api_test": {
+          "success": false,
+          "details": {
+            "services_registry": {
+              "success": true,
+              "error": null,
+              "integration_status": {
+                "three_way_integration": true,
+                "four_way_integration": true,
+                "ready_for_production": true
+              },
+              "available_services": [
+                "services",
+                "integration_status",
+                "capabilities"
+              ]
+            },
+            "four_way_readiness": {
+              "success": false,
+              "error": "Some services unavailable",
+              "service_import_results": {
+                "risk": {
+                  "success": true,
+                  "error": null
+                },
+                "behavioral": {
+                  "success": true,
+                  "error": null
+                },
+                "portfolio": {
+                  "success": false,
+                  "error": "module 'services.portfolio_service_fixed' has no attribute 'PortfolioOptimizationService'"
+                },
+                "forecasting": {
+                  "success": true,
+                  "error": null
+                }
+              }
+            }
+          },
+          "is_critical": false,
+          "timestamp": "2025-09-25T21:30:07.111245"
+        }
+      },
+      "passed": 0,
+      "failed": 1,
+      "critical_failures": 0
+    }
+  },
+  "summary": {
+    "total_tests": 8,
+    "passed": 0,
+    "failed": 8,
+    "success_rate": "0.0%",
+    "critical_failures": 7,
+    "overall_status": "CRITICAL_FAILURE",
+    "categories_tested": 7
+  },
+  "end_time": "2025-09-25T21:30:07.111245",
+  "success_rate": 0.0,
+  "overall_status": "CRITICAL_FAILURE"
+}

@@ -1,0 +1,72 @@
+# Environment variables and secrets
+.env
+*.env
+.env.local
+.env.production
+
+# API Keys (your FMP key!)
+*API_KEY*
+config/secrets.py
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs
+*.log
+logs/
+
+# Database (if you add one later)
+*.db
+*.sqlite
+*.sqlite3
+
+
+# API Keys and secrets
+.env
+*.env
+.env.*
+!.env.example
+*API_KEY*
+*api_key*
+config/secrets*
+
+# Ensure specific files with keys are ignored
+tools/*_secrets.py
