@@ -85,6 +85,9 @@ def import_fmp_tools():
         traceback.print_exc()
         return None, None
 
+# ADD THIS LINE - Execute the import and assign to module-level variables
+PortfolioDataManager, FMPDataProvider = import_fmp_tools()
+
 def get_data_manager():
     """Get data manager with FMP integration"""
     if PortfolioDataManager and FMPDataProvider:
@@ -158,26 +161,6 @@ async def calculate_comprehensive_risk(
     confidence_levels: List[float] = [0.95, 0.99],
     use_real_data: bool = True
 ) -> RiskMetricsResult:
-    """
-    Calculate comprehensive risk metrics with real market data integration
-    
-    Parameters:
-    -----------
-    symbols : List[str]
-        List of asset symbols to analyze
-    weights : Optional[Dict[str, float]]
-        Portfolio weights (if None, uses equal weights)
-    period : str
-        Analysis period ('1month', '3months', '1year', '2years', '5years')
-    confidence_levels : List[float]
-        Confidence levels for VaR/CVaR calculations
-    use_real_data : bool
-        Whether to use real FMP data or synthetic data
-        
-    Returns:
-    --------
-    RiskMetricsResult : Comprehensive risk analysis
-    """
     try:
         if use_real_data:
             data_manager = get_data_manager()
@@ -185,17 +168,15 @@ async def calculate_comprehensive_risk(
                 # Get real market data
                 returns_data, data_source = await data_manager.get_returns_data(symbols, period)
                 
+                # ADD DEBUG LOGGING HERE
+                logger.info(f"Returns data shape: {returns_data.shape if returns_data is not None else 'None'}")
+                logger.info(f"Returns data columns: {returns_data.columns.tolist() if returns_data is not None else 'None'}")
+                logger.info(f"Returns data head:\n{returns_data.head() if returns_data is not None else 'None'}")
+                
                 if returns_data is not None:
                     # Calculate portfolio returns
                     if weights:
-                        # Validate weights
-                        if abs(sum(weights.values()) - 1.0) > 0.01:
-                            return RiskMetricsResult(
-                                success=False,
-                                error="Weights must sum to 1.0"
-                            )
-                        
-                        # Calculate weighted portfolio returns
+                        # ... weight validation code ...
                         portfolio_returns = pd.Series(0, index=returns_data.index)
                         for symbol in symbols:
                             if symbol in returns_data.columns and symbol in weights:
@@ -203,6 +184,11 @@ async def calculate_comprehensive_risk(
                     else:
                         # Equal weighted portfolio
                         portfolio_returns = returns_data.mean(axis=1)
+                    
+                    # ADD DEBUG HERE
+                    logger.info(f"Portfolio returns shape: {portfolio_returns.shape}")
+                    logger.info(f"Portfolio returns mean: {portfolio_returns.mean():.6f}")
+                    logger.info(f"Portfolio returns head: {portfolio_returns.head().tolist()}")
                     
                     # Calculate risk metrics
                     risk_result = _calculate_risk_metrics_from_returns(
@@ -574,14 +560,29 @@ def _calculate_risk_metrics_from_returns(
 ) -> Dict[str, Any]:
     """Calculate risk metrics from return series"""
     if returns.empty:
+        logger.error("Empty returns series received!")
         return {}
+    
+    # ADD THESE DEBUG LINES
+    logger.info(f"Calculating metrics from {len(returns)} return observations")
+    logger.info(f"Returns mean: {returns.mean():.6f}, std: {returns.std():.6f}")
+    logger.info(f"Returns min: {returns.min():.6f}, max: {returns.max():.6f}")
+    logger.info(f"First 5 returns: {returns.head().tolist()}")
+    logger.info(f"Returns dtype: {returns.dtype}")
     
     try:
         # Basic statistics
         mean_return = returns.mean()
         std_return = returns.std()
+        
+        # ADD DEBUG HERE TOO
+        logger.info(f"Annualizing: mean_return={mean_return:.6f}, std_return={std_return:.6f}")
+        
         annualized_return = mean_return * 252
         annualized_vol = std_return * np.sqrt(252)
+        
+        logger.info(f"Annualized: return={annualized_return:.6f}, vol={annualized_vol:.6f}")
+        
         
         # Risk-adjusted ratios
         sharpe_ratio = annualized_return / annualized_vol if annualized_vol > 0 else 0

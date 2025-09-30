@@ -1,0 +1,17 @@
+# Streamlit Dashboard Requirements
+
+# Core framework
+streamlit>=1.28.0
+
+# API communication
+requests>=2.31.0
+
+# Data manipulation
+pandas>=2.1.0
+numpy>=1.24.0
+
+# Visualization
+plotly>=5.17.0
+
+# Optional: Enhanced features
+python-dotenv>=1.0.0  # For environment variables if needed
