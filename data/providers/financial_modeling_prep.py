@@ -21,6 +21,7 @@ from dataclasses import dataclass
 import json
 from urllib.parse import urlencode
 import time
+import os 
 from collections import defaultdict
 
 # Import the abstract base class from your refactored tools
@@ -488,8 +489,7 @@ async def integrate_fmp_with_portfolio_tools(api_key: str) -> None:
 async def test_fmp_integration():
     """Test FMP integration with real data"""
     
-    # You need to provide your actual FMP API key
-    API_KEY = "your_fmp_api_key_here"  # Replace with real key
+    # You need to provide your actual FMP API key # Replace with real key
     
     if API_KEY == "your_fmp_api_key_here":
         print("Please provide a real FMP API key to test integration")
