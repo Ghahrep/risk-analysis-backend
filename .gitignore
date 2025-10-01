@@ -1,12 +1,14 @@
 # Environment variables and secrets
 .env
 *.env
-.env.local
-.env.production
+.env.*
+!.env.example
 
-# API Keys (your FMP key!)
+# API Keys
 *API_KEY*
-config/secrets.py
+*api_key*
+config/secrets*
+tools/*_secrets.py
 
 # Python
 __pycache__/
@@ -53,20 +55,10 @@ htmlcov/
 *.log
 logs/
 
-# Database (if you add one later)
+# Database
 *.db
 *.sqlite
 *.sqlite3
 
-
-# API Keys and secrets
-.env
-*.env
-.env.*
-!.env.example
-*API_KEY*
-*api_key*
-config/secrets*
-
-# Ensure specific files with keys are ignored
-tools/*_secrets.py
+# Streamlit
+.streamlit/secrets.toml
