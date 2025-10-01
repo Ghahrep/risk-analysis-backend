@@ -16,6 +16,8 @@ Integrates with existing FMP API data pipeline.
 import pandas as pd
 import numpy as np
 import requests
+import os  # Add this
+from dotenv import load_dotenv  # Add this
 from typing import Dict, List, Optional, Tuple, Union
 from dataclasses import dataclass
 from datetime import datetime, timedelta

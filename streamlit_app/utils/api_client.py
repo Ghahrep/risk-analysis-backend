@@ -31,8 +31,6 @@ class RiskAnalysisAPIClient:
             st.error(f"API Error: {str(e)}")
             return None
     
-    # In utils/api_client.py, update the _post method around line 46-52:
-
     def _post(self, endpoint: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Make POST request with error handling"""
         request_logger.log_request(endpoint, data)
@@ -125,7 +123,8 @@ class RiskAnalysisAPIClient:
         weights: List[float]
     ) -> Optional[Dict[str, Any]]:
         """Run stress test scenarios"""
-        return self._post("/stress", {
+        # FIX: Changed from /stress to /stress-test
+        return self._post("/stress-test", {
             "symbols": symbols,
             "weights": weights,
             "use_real_data": True
@@ -183,7 +182,8 @@ class RiskAnalysisAPIClient:
         period: str = "1year"
     ) -> Optional[Dict[str, Any]]:
         """Basic correlation analysis"""
-        return self._post("/correlation-analysis", {
+        # FIX: Changed from /correlation-analysis to /correlations
+        return self._post("/correlations", {
             "symbols": symbols,
             "period": period,
             "use_real_data": True
@@ -223,69 +223,9 @@ class RiskAnalysisAPIClient:
         period: str = "1year"
     ) -> Optional[Dict[str, Any]]:
         """Hierarchical clustering of correlations"""
-        return self._post("/correlation-clustering", {
+        # FIX: Changed from /correlation-clustering to /clustering
+        return self._post("/clustering", {
             "symbols": symbols,
-            "period": period,
-            "use_real_data": True
-        })
-    
-    def correlation_network(
-        self,
-        symbols: List[str],
-        period: str = "1year"
-    ) -> Optional[Dict[str, Any]]:
-        """Network topology analysis"""
-        return self._post("/correlation-network", {
-            "symbols": symbols,
-            "period": period,
-            "use_real_data": True
-        })
-    
-    def comprehensive_correlation(
-        self,
-        symbols: List[str],
-        period: str = "1year"
-    ) -> Optional[Dict[str, Any]]:
-        """Integrated correlation analysis"""
-        return self._post("/comprehensive-correlation", {
-            "symbols": symbols,
-            "period": period,
-            "use_real_data": True
-        })
-    
-    # Forecasting & Regime
-    def forecast_returns(
-        self,
-        symbols: List[str],
-        period: str = "1year"
-    ) -> Optional[Dict[str, Any]]:
-        """Return forecasting"""
-        return self._post("/forecast", {
-            "symbols": symbols,
-            "period": period,
-            "use_real_data": True
-        })
-    
-    def regime_analysis_hmm(
-        self,
-        symbol: str,
-        period: str = "1year"
-    ) -> Optional[Dict[str, Any]]:
-        """HMM regime detection"""
-        return self._post("/regime-hmm", {
-            "symbol": symbol,
-            "period": period,
-            "use_real_data": True
-        })
-    
-    def regime_analysis_volatility(
-        self,
-        symbol: str,
-        period: str = "1year"
-    ) -> Optional[Dict[str, Any]]:
-        """Volatility-based regime analysis"""
-        return self._post("/regime-volatility", {
-            "symbol": symbol,
             "period": period,
             "use_real_data": True
         })
@@ -308,20 +248,20 @@ class RiskAnalysisAPIClient:
             return None
         
         # Transform API response to match Streamlit page expectations
-        forecast = response_data.get("forecast", {})
+        forecast = response_data.get("volatility_forecast", {})
         
         return {
-            "success": response_data.get("success", False),
+            "success": True,
             "volatility_forecast": {
                 "current_volatility": forecast.get("current_volatility", 0),
-                "forecast_mean": forecast.get("forecast_volatility", 0),
-                "trend": forecast.get("volatility_trend", "stable").lower(),
+                "forecast_mean": forecast.get("forecast_mean", 0),
+                "trend": forecast.get("trend", "stable"),
                 "confidence_bands": forecast.get("confidence_bands", {}),
                 "model_aic": forecast.get("model_aic")
             },
             "data_source": response_data.get("data_source", "Unknown"),
-            "symbols": response_data.get("symbols", symbols),
-            "period": response_data.get("period", period)
+            "symbols": symbols,
+            "period": period
         }
 
 
@@ -366,41 +306,10 @@ class BehavioralAPIClient:
         symbols: Optional[List[str]] = None
     ) -> Optional[Dict[str, Any]]:
         """Detect cognitive biases in conversation"""
-        data = {"conversation_messages": conversation_messages}
+        data = {"conversation_history": conversation_messages}  # Match API expectation
         if symbols:
             data["symbols"] = symbols
         return self._post("/analyze-biases", data)
-    
-    def analyze_sentiment(
-        self,
-        conversation_messages: List[Dict[str, str]],
-        symbols: Optional[List[str]] = None
-    ) -> Optional[Dict[str, Any]]:
-        """Analyze market sentiment"""
-        data = {"conversation_messages": conversation_messages}
-        if symbols:
-            data["symbols"] = symbols
-        return self._post("/analyze-sentiment", data)
-    
-    def assess_profile(
-        self,
-        conversation_messages: List[Dict[str, str]]
-    ) -> Optional[Dict[str, Any]]:
-        """Assess behavioral profile and risk tolerance"""
-        return self._post("/assess-profile", {
-            "conversation_messages": conversation_messages
-        })
-    
-    def comprehensive_behavioral_analysis(
-        self,
-        conversation_messages: List[Dict[str, str]],
-        symbols: Optional[List[str]] = None
-    ) -> Optional[Dict[str, Any]]:
-        """Run all behavioral analyses"""
-        data = {"conversation_messages": conversation_messages}
-        if symbols:
-            data["symbols"] = symbols
-        return self._post("/comprehensive-behavioral", data)
 
 
 # Singleton instances for reuse

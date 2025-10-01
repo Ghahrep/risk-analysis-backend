@@ -338,9 +338,12 @@ def main():
         if 'stress_result' in st.session_state:
             result = st.session_state['stress_result']
             
-            stress_scenarios = result.get('stress_scenarios', {})
-            worst_case = result.get('worst_case_scenario', 'Unknown')
-            resilience_score = result.get('resilience_score', 0)
+            # Unwrap the stress_test_results from API response
+            stress_test_results = result.get('stress_test_results', {})
+            
+            stress_scenarios = stress_test_results.get('stress_scenarios', {})
+            worst_case = stress_test_results.get('worst_case_scenario', 'Unknown')
+            resilience_score = stress_test_results.get('resilience_score', 0)
             
             if not stress_scenarios:
                 st.warning("⚠️ No stress test results available.")
@@ -502,81 +505,87 @@ def main():
         
         if 'var_result' in st.session_state:
             result = st.session_state['var_result']
-            var_estimates = result.get('var_cvar_estimates', {})
+            
+            # Unwrap var_analysis from API response
+            var_analysis = result.get('var_analysis', {})
+            var_estimates = var_analysis.get('var_cvar_estimates', {})
+            
             confidence_key = f"{int(confidence_level*100)}%"
             var_data = var_estimates.get(confidence_key, {})
-            
+    
             if var_data:
-                col1, col2, col3 = st.columns(3)
-                
-                var_value = var_data.get('var', 0)
-                cvar_value = var_data.get('cvar', 0)
-                
-                with col1:
-                    st.metric(
-                        f"Daily VaR ({confidence_level:.0%})",
-                        f"{abs(var_value):.2%}",
-                        help="Maximum expected daily loss at this confidence"
-                    )
-                
-                with col2:
-                    st.metric(
-                        f"CVaR ({confidence_level:.0%})",
-                        f"{abs(cvar_value):.2%}",
-                        help="Average loss when VaR threshold is breached"
-                    )
-                
-                with col3:
-                    portfolio_value = st.number_input(
-                        "Portfolio Value ($)",
-                        min_value=1000,
-                        value=100000,
-                        step=10000,
-                        format="%d"
-                    )
-                
-                # Dollar risk
-                st.markdown("### 💵 Dollar Risk Exposure")
-                
-                dollar_var = abs(var_value * portfolio_value)
-                dollar_cvar = abs(cvar_value * portfolio_value)
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.metric(
-                        f"Daily VaR on ${portfolio_value:,.0f}",
-                        f"${dollar_var:,.0f}",
-                        help="Maximum expected dollar loss per day"
-                    )
-                
-                with col2:
-                    st.metric(
-                        f"CVaR on ${portfolio_value:,.0f}",
-                        f"${dollar_cvar:,.0f}",
-                        help="Average dollar loss in worst scenarios"
-                    )
-                
-                # NEW: Interpretation
-                with st.expander("🤖 What does this mean?", expanded=True):
-                    days_per_year = 252
-                    expected_breaches = days_per_year * (1 - confidence_level)
                     
-                    st.markdown(f"""
-                    **Daily Risk Profile:**
-                    - On a typical day, with {confidence_level:.0%} confidence, you won't lose more than **${dollar_var:,.0f}** ({abs(var_value):.2%})
-                    - However, about **{expected_breaches:.0f} days per year**, losses could exceed this threshold
-                    - When that happens, average loss is **${dollar_cvar:,.0f}** ({abs(cvar_value):.2%})
-                    
-                    **Risk Assessment:**
-                    """)
-                    
-                    if abs(var_value) > 0.05:
-                        st.warning("🟠 **High daily risk.** Your portfolio can swing 5%+ in a single day. Consider reducing volatility or position sizes.")
-                    elif abs(var_value) > 0.03:
-                        st.info("🟡 **Moderate daily risk.** Typical for equity portfolios. Monitor during volatile periods.")
-                    else:
-                        st.success("🟢 **Low daily risk.** Your portfolio has good daily stability.")
+                    if var_data:
+                        col1, col2, col3 = st.columns(3)
+                        
+                        var_value = var_data.get('var', 0)
+                        cvar_value = var_data.get('cvar', 0)
+                        
+                        with col1:
+                            st.metric(
+                                f"Daily VaR ({confidence_level:.0%})",
+                                f"{abs(var_value):.2%}",
+                                help="Maximum expected daily loss at this confidence"
+                            )
+                        
+                        with col2:
+                            st.metric(
+                                f"CVaR ({confidence_level:.0%})",
+                                f"{abs(cvar_value):.2%}",
+                                help="Average loss when VaR threshold is breached"
+                            )
+                        
+                        with col3:
+                            portfolio_value = st.number_input(
+                                "Portfolio Value ($)",
+                                min_value=1000,
+                                value=100000,
+                                step=10000,
+                                format="%d"
+                            )
+                        
+                        # Dollar risk
+                        st.markdown("### 💵 Dollar Risk Exposure")
+                        
+                        dollar_var = abs(var_value * portfolio_value)
+                        dollar_cvar = abs(cvar_value * portfolio_value)
+                        
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.metric(
+                                f"Daily VaR on ${portfolio_value:,.0f}",
+                                f"${dollar_var:,.0f}",
+                                help="Maximum expected dollar loss per day"
+                            )
+                        
+                        with col2:
+                            st.metric(
+                                f"CVaR on ${portfolio_value:,.0f}",
+                                f"${dollar_cvar:,.0f}",
+                                help="Average dollar loss in worst scenarios"
+                            )
+                        
+                        # NEW: Interpretation
+                        with st.expander("🤖 What does this mean?", expanded=True):
+                            days_per_year = 252
+                            expected_breaches = days_per_year * (1 - confidence_level)
+                            
+                            st.markdown(f"""
+                            **Daily Risk Profile:**
+                            - On a typical day, with {confidence_level:.0%} confidence, you won't lose more than **${dollar_var:,.0f}** ({abs(var_value):.2%})
+                            - However, about **{expected_breaches:.0f} days per year**, losses could exceed this threshold
+                            - When that happens, average loss is **${dollar_cvar:,.0f}** ({abs(cvar_value):.2%})
+                            
+                            **Risk Assessment:**
+                            """)
+                            
+                            if abs(var_value) > 0.05:
+                                st.warning("🟠 **High daily risk.** Your portfolio can swing 5%+ in a single day. Consider reducing volatility or position sizes.")
+                            elif abs(var_value) > 0.03:
+                                st.info("🟡 **Moderate daily risk.** Typical for equity portfolios. Monitor during volatile periods.")
+                            else:
+                                st.success("🟢 **Low daily risk.** Your portfolio has good daily stability.")
     
     # VOLATILITY FORECASTING
     elif analysis_type == 'volatility':
