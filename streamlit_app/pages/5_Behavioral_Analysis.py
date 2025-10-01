@@ -1,417 +1,344 @@
 """
-Behavioral Analysis Page
-Cognitive bias detection, sentiment analysis, and behavioral risk assessment
+Behavioral Analysis Page - Enhanced UX for User Testing
+Key Improvements: Clear guidance, example prompts, integrated insights
 """
 
 import streamlit as st
 import sys
+import time
 from pathlib import Path
 from datetime import datetime
-from utils.portfolio_manager import get_portfolio, set_portfolio, normalize_weights, initialize_portfolio
-
-# Initialize portfolio
-initialize_portfolio()
 
 sys.path.append(str(Path(__file__).parent.parent))
+
+from utils.portfolio_manager import get_portfolio, set_portfolio, normalize_weights, initialize_portfolio
 from utils.api_client import get_behavioral_api_client
+from utils.error_handler import safe_api_call
+from utils.request_logger import request_logger
+from utils.styling import (
+    inject_custom_css, 
+    add_page_header, 
+    add_sidebar_branding,
+    show_empty_state,
+    add_footer_tip
+)
+
+initialize_portfolio()
 
 st.set_page_config(page_title="Behavioral Analysis", page_icon="🧠", layout="wide")
 
 api_client = get_behavioral_api_client()
 
 def main():
-    st.title("🧠 Behavioral Analysis")
-    st.markdown("Analyze investment decisions for cognitive biases and behavioral patterns")
+    inject_custom_css()
     
-    # Initialize session state for conversation
+    add_page_header(
+        "Behavioral Analysis",
+        "Identify cognitive biases affecting your investment decisions",
+        "🧠"
+    )
+    
+    # Initialize session state
     if 'conversation_history' not in st.session_state:
         st.session_state.conversation_history = []
     
-    # Sidebar configuration
+    # Sidebar with goal-based navigation
     with st.sidebar:
-        st.header("Analysis Configuration")
+        add_sidebar_branding()
         
-        # Portfolio context (optional)
-        st.subheader("Portfolio Context (Optional)")
-        symbols_input = st.text_area(
-            "Your Holdings",
-            value="",
-            height=100,
-            placeholder="Enter symbols you own\n(one per line)",
-            help="Providing your holdings enables market-context analysis"
-        )
+        st.markdown("### 🎯 What concerns you?")
+        st.caption("Common investor questions")
         
-        symbols = [s.strip().upper() for s in symbols_input.split('\n') if s.strip()]
+        example_prompts = {
+            "Am I being too emotional?": "bias",
+            "Should I sell my losers?": "bias",
+            "Am I chasing winners?": "bias",
+            "Is my fear justified?": "sentiment"
+        }
         
-        if symbols:
-            st.success(f"✓ {len(symbols)} holdings detected")
+        for question, analysis in example_prompts.items():
+            if st.button(question, use_container_width=True, key=f"prompt_{analysis}_{question[:10]}"):
+                st.session_state['selected_prompt'] = question
         
         st.markdown("---")
         
-        # Analysis type
-        st.subheader("Analysis Type")
-        analysis_type = st.radio(
-            "Select Analysis",
-            ["Bias Detection", "Sentiment Analysis", "Risk Profile", "Comprehensive"]
-        )
+        # Optional portfolio context
+        st.markdown("### Portfolio Context")
+        st.caption("Optional: helps with context")
         
-        # Clear conversation
-        if st.button("🔄 Clear Conversation", use_container_width=True):
-            st.session_state.conversation_history = []
-            st.rerun()
+        symbols, weights = get_portfolio()
+        
+        if symbols:
+            st.success(f"✓ Using {len(symbols)} holdings")
+            st.caption(", ".join(symbols[:3]) + ("..." if len(symbols) > 3 else ""))
+        else:
+            st.info("No portfolio loaded")
+        
+        st.markdown("---")
+        
+        # Conversation management
+        if st.session_state.conversation_history:
+            msg_count = len([m for m in st.session_state.conversation_history if m['role'] == 'user'])
+            st.markdown(f"**Messages:** {msg_count}")
+            
+            if st.button("🔄 Start Over", key="clear_conv", use_container_width=True):
+                st.session_state.conversation_history = []
+                for key in ['bias_result', 'sentiment_result', 'profile_result']:
+                    if key in st.session_state:
+                        del st.session_state[key]
+                st.rerun()
     
-    # Main content area
-    if analysis_type == "Bias Detection":
-        st.header("Cognitive Bias Detection")
-        st.markdown("Identify potential cognitive biases in your investment thinking")
+    # Main content - streamlined to bias detection (most useful)
+    st.markdown("## Share Your Investment Concerns")
+    
+    # Show example prompts if no conversation yet
+    if not st.session_state.conversation_history:
+        st.markdown("""
+        <div style='background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%); 
+                    padding: 2rem; border-radius: 12px; margin-bottom: 2rem;'>
+            <h3 style='margin-top: 0; color: #667eea;'>Get objective feedback on your thinking</h3>
+            <p style='color: #808495; margin-bottom: 0;'>
+                Share your investment thoughts, concerns, or recent decisions. I'll help identify any 
+                cognitive biases that might be affecting your judgment.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
         
-        # Conversation input
-        st.subheader("Share Your Investment Thoughts")
+        # Example prompts
+        st.markdown("### 💭 Example Questions")
         
-        user_message = st.text_area(
-            "What are you thinking about your investments?",
-            height=150,
-            placeholder="Example: 'I'm thinking of selling my tech stocks because they've been going down lately, but I'm holding onto my losers hoping they'll bounce back...'",
-            help="Share your current investment thoughts, concerns, or decisions"
-        )
+        col1, col2 = st.columns(2)
         
-        if st.button("🔍 Analyze for Biases", type="primary"):
-            if user_message:
-                with st.spinner("Analyzing for cognitive biases..."):
-                    # Add to conversation history
-                    st.session_state.conversation_history.append({
-                        "role": "user",
-                        "content": user_message
-                    })
-                    
-                    # Call bias detection API
-                    result = api_client.analyze_biases(
+        with col1:
+            st.markdown("""
+            **Recent decisions:**
+            - "I sold AAPL after it dropped 15%, was that emotional?"
+            - "I'm holding onto my losers hoping they recover"
+            - "I bought more after seeing it go up 20%"
+            """)
+        
+        with col2:
+            st.markdown("""
+            **Current concerns:**
+            - "Should I sell everything? Markets feel too high"
+            - "I keep checking prices multiple times per day"
+            - "I'm afraid to miss out on this AI rally"
+            """)
+    
+    # Conversation input
+    user_message = st.text_area(
+        "What's on your mind?",
+        height=150,
+        placeholder="Example: I'm thinking about selling my tech stocks because they're down 20%. I bought them 6 months ago and can't stand watching them drop. Should I cut my losses or wait for them to recover?",
+        help="Share specific situations, feelings, or decisions you're facing",
+        key="user_input"
+    )
+    
+    # Pre-fill from sidebar prompt if selected
+    if 'selected_prompt' in st.session_state:
+        user_message = st.session_state['selected_prompt']
+        del st.session_state['selected_prompt']
+    
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        analyze_button = st.button("🔍 Analyze for Biases", type="primary", use_container_width=True)
+    
+    with col2:
+        st.caption("Takes 10-15 seconds")
+    
+    if analyze_button:
+        if not user_message or len(user_message.strip()) < 10:
+            st.warning("⚠️ Please share at least a sentence or two about your investment thinking")
+        else:
+            # Add to conversation
+            st.session_state.conversation_history.append({
+                "role": "user",
+                "content": user_message
+            })
+            
+            with st.spinner("🧠 Analyzing for cognitive biases..."):
+                symbols, weights = get_portfolio()
+                
+                result = safe_api_call(
+                    lambda: api_client.analyze_biases(
                         st.session_state.conversation_history,
                         symbols if symbols else None
-                    )
-                    
-                    if result:
-                        st.session_state['bias_result'] = result
-                        
-                        # Add AI response to history
-                        st.session_state.conversation_history.append({
-                            "role": "assistant",
-                            "content": "Analysis complete"
-                        })
-            else:
-                st.warning("Please enter your investment thoughts to analyze")
-        
-        # Display results
-        if 'bias_result' in st.session_state:
-            result = st.session_state['bias_result']
-            
-            st.markdown("---")
-            st.subheader("Detected Biases")
-            
-            biases = result.get('biases_detected', [])
-            
-            if biases and len(biases) > 0:
-                for bias in biases:
-                    with st.expander(f"⚠️ {bias.get('bias_type', 'Unknown Bias')} - Severity: {bias.get('severity', 'Unknown')}", expanded=True):
-                        st.write(f"**Description:** {bias.get('description', 'No description available')}")
-                        st.write(f"**Evidence:** {bias.get('evidence', 'No evidence provided')}")
-                        
-                        if bias.get('recommendation'):
-                            st.info(f"**Recommendation:** {bias['recommendation']}")
+                    ),
+                    error_context="bias detection"
+                )
                 
-                # Risk score
-                risk_score = result.get('behavioral_risk_score', 0)
-                
-                col1, col2 = st.columns([1, 2])
-                
-                with col1:
-                    st.metric("Behavioral Risk Score", f"{risk_score}/100")
-                
-                with col2:
-                    if risk_score > 70:
-                        st.error("High behavioral risk detected - consider seeking objective second opinion")
-                    elif risk_score > 40:
-                        st.warning("Moderate behavioral risk - be mindful of identified biases")
-                    else:
-                        st.success("Low behavioral risk - decision-making appears rational")
-            else:
-                st.success("✅ No significant biases detected in your analysis")
-                st.info("Your investment thinking appears rational and well-balanced")
-    
-    elif analysis_type == "Sentiment Analysis":
-        st.header("Market Sentiment Analysis")
-        st.markdown("Analyze your emotional state and market sentiment")
-        
-        # Sentiment input
-        st.subheader("Express Your Market Sentiment")
-        
-        user_message = st.text_area(
-            "How do you feel about the market?",
-            height=150,
-            placeholder="Example: 'I'm really worried about inflation and rising rates. Everything seems overvalued and I think we're heading for a crash...'",
-            help="Share your feelings and concerns about market conditions"
-        )
-        
-        if st.button("📊 Analyze Sentiment", type="primary"):
-            if user_message:
-                with st.spinner("Analyzing sentiment..."):
-                    # Add to conversation
+                if result:
+                    st.session_state['bias_result'] = result
                     st.session_state.conversation_history.append({
-                        "role": "user",
-                        "content": user_message
+                        "role": "assistant",
+                        "content": "Analysis complete"
                     })
-                    
-                    # Call sentiment API
-                    result = api_client.analyze_sentiment(
-                        st.session_state.conversation_history,
-                        symbols if symbols else None
-                    )
-                    
-                    if result:
-                        st.session_state['sentiment_result'] = result
-            else:
-                st.warning("Please share your market sentiment to analyze")
-        
-        # Display results
-        if 'sentiment_result' in st.session_state:
-            result = st.session_state['sentiment_result']
-            
-            st.markdown("---")
-            st.subheader("Sentiment Analysis Results")
-            
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                sentiment = result.get('overall_sentiment', 'neutral')
-                emoji = {"bullish": "📈", "bearish": "📉", "neutral": "➡️"}.get(sentiment, "➡️")
-                st.metric("Overall Sentiment", f"{emoji} {sentiment.capitalize()}")
-            
-            with col2:
-                confidence = result.get('sentiment_confidence', 0)
-                st.metric("Confidence", f"{confidence:.0%}")
-            
-            with col3:
-                alignment = result.get('market_alignment', 'unknown')
-                st.metric("Market Alignment", alignment.capitalize())
-            
-            # Emotional indicators
-            if 'emotional_indicators' in result:
-                st.subheader("Emotional Indicators")
-                
-                emotions = result['emotional_indicators']
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.write("**Detected Emotions:**")
-                    for emotion in emotions.get('primary_emotions', []):
-                        st.write(f"• {emotion}")
-                
-                with col2:
-                    st.write("**Risk Level:**")
-                    risk = emotions.get('risk_level', 'unknown')
-                    if risk == 'high':
-                        st.error(f"⚠️ {risk.upper()} - Strong emotional influence detected")
-                    elif risk == 'moderate':
-                        st.warning(f"⚡ {risk.upper()} - Some emotional influence")
-                    else:
-                        st.success(f"✓ {risk.upper()} - Rational sentiment")
-            
-            # Recommendations
-            if 'recommendations' in result:
-                st.subheader("Recommendations")
-                for rec in result['recommendations']:
-                    st.info(f"💡 {rec}")
-    
-    elif analysis_type == "Risk Profile":
-        st.header("Behavioral Risk Profile Assessment")
-        st.markdown("Assess your behavioral risk tolerance and investment personality")
-        
-        st.subheader("Share Your Investment Approach")
-        
-        user_message = st.text_area(
-            "Describe your investment style and risk approach",
-            height=150,
-            placeholder="Example: 'I usually buy stocks after doing research but sometimes I sell when I see them drop 10%. I like growth stocks but get nervous when the market is volatile...'",
-            help="Describe how you make investment decisions and handle risk"
-        )
-        
-        if st.button("🎯 Assess Profile", type="primary"):
-            if user_message:
-                with st.spinner("Assessing behavioral profile..."):
-                    # Add to conversation
-                    st.session_state.conversation_history.append({
-                        "role": "user",
-                        "content": user_message
-                    })
-                    
-                    # Call profile assessment API
-                    result = api_client.assess_profile(
-                        st.session_state.conversation_history
-                    )
-                    
-                    if result:
-                        st.session_state['profile_result'] = result
-            else:
-                st.warning("Please describe your investment approach")
-        
-        # Display results
-        if 'profile_result' in st.session_state:
-            result = st.session_state['profile_result']
-            
-            st.markdown("---")
-            st.subheader("Your Behavioral Risk Profile")
-            
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                risk_tolerance = result.get('risk_tolerance', 'moderate')
-                st.metric("Risk Tolerance", risk_tolerance.capitalize())
-            
-            with col2:
-                consistency = result.get('consistency_score', 0)
-                st.metric("Consistency Score", f"{consistency:.0f}/100")
-            
-            with col3:
-                maturity = result.get('behavioral_maturity', 'developing')
-                st.metric("Behavioral Maturity", maturity.capitalize())
-            
-            # Profile characteristics
-            if 'profile_characteristics' in result:
-                st.subheader("Profile Characteristics")
-                
-                chars = result['profile_characteristics']
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.write("**Strengths:**")
-                    for strength in chars.get('strengths', []):
-                        st.write(f"✅ {strength}")
-                
-                with col2:
-                    st.write("**Areas for Improvement:**")
-                    for area in chars.get('areas_for_improvement', []):
-                        st.write(f"⚠️ {area}")
-            
-            # Development recommendations
-            if 'development_recommendations' in result:
-                st.subheader("Development Recommendations")
-                
-                for rec in result['development_recommendations']:
-                    st.info(f"📚 {rec}")
-    
-    elif analysis_type == "Comprehensive":
-        st.header("Comprehensive Behavioral Analysis")
-        st.markdown("Complete analysis combining bias detection, sentiment, and risk profile")
-        
-        st.subheader("Comprehensive Investment Discussion")
-        
-        user_message = st.text_area(
-            "Tell us about your current investment situation",
-            height=200,
-            placeholder="Example: 'I've been holding AAPL and TSLA for 2 years. They're both down and I'm not sure what to do. I feel anxious when I check my portfolio. I'm considering selling to avoid further losses but I also don't want to miss out if they recover...'",
-            help="Share comprehensive details about your investments, feelings, and decision-making"
-        )
-        
-        if st.button("🔬 Run Comprehensive Analysis", type="primary"):
-            if user_message:
-                with st.spinner("Running comprehensive behavioral analysis..."):
-                    # Add to conversation
-                    st.session_state.conversation_history.append({
-                        "role": "user",
-                        "content": user_message
-                    })
-                    
-                    # Run all analyses
-                    bias_result = api_client.analyze_biases(
-                        st.session_state.conversation_history,
-                        symbols if symbols else None
-                    )
-                    
-                    sentiment_result = api_client.analyze_sentiment(
-                        st.session_state.conversation_history,
-                        symbols if symbols else None
-                    )
-                    
-                    profile_result = api_client.assess_profile(
-                        st.session_state.conversation_history
-                    )
-                    
-                    st.session_state['comprehensive_result'] = {
-                        'bias': bias_result,
-                        'sentiment': sentiment_result,
-                        'profile': profile_result
-                    }
-            else:
-                st.warning("Please provide details about your investment situation")
-        
-        # Display comprehensive results
-        if 'comprehensive_result' in st.session_state:
-            result = st.session_state['comprehensive_result']
-            
-            st.markdown("---")
-            st.success("✅ Comprehensive Analysis Complete")
-            
-            # Summary metrics
-            st.subheader("Overview")
-            
-            col1, col2, col3, col4 = st.columns(4)
-            
-            with col1:
-                bias_count = len(result.get('bias', {}).get('biases_detected', []))
-                st.metric("Biases Detected", bias_count)
-            
-            with col2:
-                sentiment = result.get('sentiment', {}).get('overall_sentiment', 'neutral')
-                st.metric("Sentiment", sentiment.capitalize())
-            
-            with col3:
-                risk_score = result.get('bias', {}).get('behavioral_risk_score', 0)
-                st.metric("Risk Score", f"{risk_score}/100")
-            
-            with col4:
-                risk_tolerance = result.get('profile', {}).get('risk_tolerance', 'moderate')
-                st.metric("Risk Tolerance", risk_tolerance.capitalize())
-            
-            # Detailed sections
-            tab1, tab2, tab3 = st.tabs(["🎯 Biases", "📊 Sentiment", "👤 Profile"])
-            
-            with tab1:
-                biases = result.get('bias', {}).get('biases_detected', [])
-                if biases:
-                    for bias in biases:
-                        st.warning(f"**{bias.get('bias_type')}** - {bias.get('description')}")
+                    st.success("✓ Analysis complete!")
+                    time.sleep(0.5)
+                    st.rerun()
                 else:
-                    st.success("No significant biases detected")
-            
-            with tab2:
-                sent_result = result.get('sentiment', {})
-                st.write(f"**Overall Sentiment:** {sent_result.get('overall_sentiment', 'N/A').capitalize()}")
-                st.write(f"**Confidence:** {sent_result.get('sentiment_confidence', 0):.0%}")
-                st.write(f"**Market Alignment:** {sent_result.get('market_alignment', 'N/A').capitalize()}")
-            
-            with tab3:
-                prof_result = result.get('profile', {})
-                st.write(f"**Risk Tolerance:** {prof_result.get('risk_tolerance', 'N/A').capitalize()}")
-                st.write(f"**Consistency Score:** {prof_result.get('consistency_score', 0):.0f}/100")
-                st.write(f"**Behavioral Maturity:** {prof_result.get('behavioral_maturity', 'N/A').capitalize()}")
+                    st.error("❌ Analysis failed. Try being more specific about your investment situation.")
     
-    # Conversation history display
-    if st.session_state.conversation_history:
+    # Display results
+    if 'bias_result' in st.session_state:
+        result = st.session_state['bias_result']
+        
+        st.markdown("---")
+        st.markdown("## Analysis Results")
+        
+        biases = result.get('biases_detected', [])
+        risk_score = result.get('behavioral_risk_score', 0)
+        
+        # Overall assessment
+        col1, col2 = st.columns([1, 3])
+        
+        with col1:
+            if risk_score > 70:
+                st.markdown("""
+                <div style='background: rgba(220, 53, 69, 0.1); padding: 2rem; border-radius: 12px; text-align: center;'>
+                    <div style='font-size: 3rem;'>🔴</div>
+                    <h3 style='color: #dc3545; margin: 0.5rem 0;'>{}/100</h3>
+                    <p style='color: #808495; margin: 0;'>High Risk</p>
+                </div>
+                """.format(risk_score), unsafe_allow_html=True)
+            elif risk_score > 40:
+                st.markdown("""
+                <div style='background: rgba(255, 193, 7, 0.1); padding: 2rem; border-radius: 12px; text-align: center;'>
+                    <div style='font-size: 3rem;'>🟡</div>
+                    <h3 style='color: #ffc107; margin: 0.5rem 0;'>{}/100</h3>
+                    <p style='color: #808495; margin: 0;'>Moderate Risk</p>
+                </div>
+                """.format(risk_score), unsafe_allow_html=True)
+            else:
+                st.markdown("""
+                <div style='background: rgba(40, 167, 69, 0.1); padding: 2rem; border-radius: 12px; text-align: center;'>
+                    <div style='font-size: 3rem;'>🟢</div>
+                    <h3 style='color: #28a745; margin: 0.5rem 0;'>{}/100</h3>
+                    <p style='color: #808495; margin: 0;'>Low Risk</p>
+                </div>
+                """.format(risk_score), unsafe_allow_html=True)
+        
+        with col2:
+            if risk_score > 70:
+                st.markdown("""
+                <div style='background: rgba(220, 53, 69, 0.05); padding: 1.5rem; border-radius: 12px;'>
+                    <h3 style='margin-top: 0;'>High Behavioral Risk Detected</h3>
+                    <p>Your investment thinking shows strong signs of cognitive bias. Emotions or mental 
+                    shortcuts may be significantly affecting your decisions.</p>
+                    <p style='margin-bottom: 0;'><strong>Recommendation:</strong> Consider seeking a second 
+                    opinion from a financial advisor or trusted friend before making major moves. Take time 
+                    to cool off if you're feeling urgent pressure to act.</p>
+                </div>
+                """, unsafe_allow_html=True)
+            elif risk_score > 40:
+                st.markdown("""
+                <div style='background: rgba(255, 193, 7, 0.05); padding: 1.5rem; border-radius: 12px;'>
+                    <h3 style='margin-top: 0;'>Moderate Behavioral Risk</h3>
+                    <p>Some cognitive biases are present in your thinking. This is normal - everyone has biases. 
+                    The key is being aware of them.</p>
+                    <p style='margin-bottom: 0;'><strong>Recommendation:</strong> Review the specific biases 
+                    identified below. Consider writing down your reasoning before making decisions to spot 
+                    these patterns.</p>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown("""
+                <div style='background: rgba(40, 167, 69, 0.05); padding: 1.5rem; border-radius: 12px;'>
+                    <h3 style='margin-top: 0;'>Low Behavioral Risk</h3>
+                    <p>Your investment thinking appears rational and well-balanced. No significant cognitive 
+                    biases detected in your current reasoning.</p>
+                    <p style='margin-bottom: 0;'><strong>Keep it up:</strong> Continue making decisions based 
+                    on analysis rather than emotion. Stay vigilant for biases, especially during market stress.</p>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        # Detected biases
+        if biases and len(biases) > 0:
+            st.markdown("### Identified Biases")
+            
+            for i, bias in enumerate(biases, 1):
+                bias_type = bias.get('bias_type', 'Unknown Bias')
+                severity = bias.get('severity', 'Unknown')
+                description = bias.get('description', 'No description available')
+                evidence = bias.get('evidence', 'No evidence provided')
+                recommendation = bias.get('recommendation', '')
+                
+                severity_colors = {
+                    'High': ('#dc3545', '🔴'),
+                    'Medium': ('#ffc107', '🟡'),
+                    'Low': ('#28a745', '🟢')
+                }
+                color, emoji = severity_colors.get(severity, ('#808495', '⚪'))
+                
+                with st.expander(f"{emoji} {bias_type} ({severity} severity)", expanded=(i==1)):
+                    st.markdown(f"**What it is:** {description}")
+                    st.markdown(f"**Where I see it:** {evidence}")
+                    
+                    if recommendation:
+                        st.markdown(f"""
+                        <div style='background: rgba(102, 126, 234, 0.05); padding: 1rem; 
+                                    border-radius: 8px; border-left: 3px solid #667eea; margin-top: 1rem;'>
+                            <strong>What to do:</strong><br>{recommendation}
+                        </div>
+                        """, unsafe_allow_html=True)
+        else:
+            st.success("✓ No significant biases detected in your current thinking")
+        
+        # Action buttons
+        st.markdown("---")
+        st.markdown("### Next Steps")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            if st.button("💬 Ask Follow-Up", use_container_width=True):
+                st.session_state['show_follow_up'] = True
+                st.rerun()
+        
+        with col2:
+            if st.button("📊 View Portfolio", use_container_width=True):
+                st.switch_page("pages/1_Portfolio_Analysis.py")
+        
+        with col3:
+            if st.button("💡 Get Insights", use_container_width=True):
+                st.switch_page("pages/6_Portfolio_Insights.py")
+    
+    # Follow-up input
+    if st.session_state.get('show_follow_up'):
+        st.markdown("### Follow-Up Question")
+        
+        follow_up = st.text_area(
+            "Ask more about the biases or your situation",
+            placeholder="Example: How can I avoid loss aversion in the future?",
+            key="follow_up_input"
+        )
+        
+        if st.button("Ask", type="primary"):
+            if follow_up:
+                st.session_state.conversation_history.append({
+                    "role": "user",
+                    "content": follow_up
+                })
+                st.session_state['show_follow_up'] = False
+                st.rerun()
+    
+    # Conversation history
+    if len(st.session_state.conversation_history) > 2:
         with st.expander("📝 Conversation History"):
-            for msg in st.session_state.conversation_history:
+            for msg in st.session_state.conversation_history[:-2]:  # Exclude latest
                 if msg['role'] == 'user':
-                    st.write(f"**You:** {msg['content']}")
-                else:
-                    st.write(f"**Analysis:** {msg['content']}")
+                    st.markdown(f"**You:** {msg['content']}")
     
     # Footer
     st.markdown("---")
-    st.caption("""
-    💡 **Note:** Behavioral analysis is designed to help identify potential biases and improve decision-making. 
-    It should complement, not replace, thorough financial analysis and professional advice.
-    """)
+    add_footer_tip("💡 Behavioral analysis complements financial analysis. Use it to check your thinking, not replace thorough research.")
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        st.error("An unexpected error occurred in Behavioral Analysis")
+        request_logger.logger.exception("Unhandled exception in Behavioral Analysis")
+        with st.expander("🔍 Error Details"):
+            st.code(str(e))

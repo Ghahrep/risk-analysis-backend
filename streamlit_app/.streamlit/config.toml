@@ -1,0 +1,13 @@
+[theme]
+primaryColor = "#1f77b4"        # Blue accent color
+backgroundColor = "#0e1117"      # Dark background
+secondaryBackgroundColor = "#262730"  # Card background
+textColor = "#fafafa"            # White text
+font = "sans serif"
+
+[server]
+headless = true
+port = 8501
+
+[browser]
+gatherUsageStats = false

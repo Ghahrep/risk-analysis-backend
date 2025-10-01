@@ -1,6 +1,6 @@
 """
 Risk Analysis Platform - Streamlit Dashboard
-Main entry point and home page
+Main entry point and marketing/welcome page
 """
 
 import streamlit as st
@@ -118,15 +118,29 @@ def main():
     st.markdown('<div class="main-header">📊 Risk Analysis Platform</div>', unsafe_allow_html=True)
     st.markdown('<div class="sub-header">Institutional-Grade Portfolio Analytics & Insights</div>', unsafe_allow_html=True)
     
-    # Quick Actions Banner
-    col1, col2, col3 = st.columns(3)
+    # Primary CTA - Dashboard First
+    st.markdown("""
+    <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                padding: 2rem; border-radius: 12px; text-align: center; margin-bottom: 2rem;'>
+        <h2 style='color: white; margin: 0 0 1rem 0;'>Start Here: View Your Portfolio Dashboard</h2>
+        <p style='color: white; opacity: 0.9; margin: 0;'>
+            Get instant access to your portfolio health score, key risk metrics, and priority actions
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Quick Actions Bar - Dashboard Featured
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
-        if st.button("💡 Get Portfolio Insights", use_container_width=True, type="primary"):
-            st.switch_page("pages/6_Portfolio_Insights.py")
+        if st.button("📊 Dashboard", use_container_width=True, type="primary"):
+            st.switch_page("pages/0_Dashboard.py")
     with col2:
+        if st.button("💡 Portfolio Insights", use_container_width=True):
+            st.switch_page("pages/6_Portfolio_Insights.py")
+    with col3:
         if st.button("📈 Optimize Portfolio", use_container_width=True):
             st.switch_page("pages/1_Portfolio_Analysis.py")
-    with col3:
+    with col4:
         if st.button("⚠️ Analyze Risk", use_container_width=True):
             st.switch_page("pages/2_Risk_Analytics.py")
     
@@ -147,6 +161,7 @@ def main():
         st.markdown("""
         Our platform analyzes your portfolio across multiple dimensions to deliver:
         
+        - **Central Dashboard** - All key metrics at-a-glance with real-time status
         - **Clear Health Scores** - Know your portfolio's overall strength (0-100)
         - **Priority Actions** - Ranked recommendations for improvement
         - **Risk Intelligence** - Understand vulnerabilities before they hurt you
@@ -158,21 +173,38 @@ def main():
     
     with col2:
         st.info("""
-        **New Feature**
+        **New Features**
         
-        📊 Portfolio Insights Dashboard
+        📊 Portfolio Dashboard
         
-        Get a comprehensive health assessment with actionable recommendations in minutes.
+        Central command center showing portfolio status, risk metrics, and quick actions.
+        
+        💡 Enhanced Insights
+        
+        Comprehensive health assessment with actionable recommendations.
         """)
     
     st.markdown("---")
     
-    # Key Capabilities
+    # Platform Overview
     st.header("Platform Capabilities")
     
     col1, col2, col3 = st.columns(3)
     
     with col1:
+        st.markdown("""
+        <div class="feature-box">
+        <h3>📊 Dashboard</h3>
+        <ul>
+            <li>Portfolio summary at-a-glance</li>
+            <li>Key risk metrics with status</li>
+            <li>Health score tracking</li>
+            <li>Quick action buttons</li>
+        </ul>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
         st.markdown("""
         <div class="feature-box">
         <h3>💡 Portfolio Insights</h3>
@@ -185,7 +217,7 @@ def main():
         </div>
         """, unsafe_allow_html=True)
     
-    with col2:
+    with col3:
         st.markdown("""
         <div class="feature-box">
         <h3>📈 Risk Analytics</h3>
@@ -198,15 +230,45 @@ def main():
         </div>
         """, unsafe_allow_html=True)
     
-    with col3:
+    st.markdown("---")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
         st.markdown("""
         <div class="feature-box">
-        <h3>🔗 Advanced Correlation</h3>
+        <h3>🔗 Correlation Analytics</h3>
         <ul>
             <li>Regime-conditional analysis</li>
             <li>Crisis correlation multipliers</li>
             <li>Network topology</li>
             <li>Time-varying relationships</li>
+        </ul>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown("""
+        <div class="feature-box">
+        <h3>🎯 Advanced Analytics</h3>
+        <ul>
+            <li>Risk attribution analysis</li>
+            <li>Performance attribution</li>
+            <li>Factor exposure (Fama-French)</li>
+            <li>Advanced diversification metrics</li>
+        </ul>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown("""
+        <div class="feature-box">
+        <h3>🧠 Behavioral Analysis</h3>
+        <ul>
+            <li>Cognitive bias detection</li>
+            <li>Sentiment analysis</li>
+            <li>Risk profile assessment</li>
+            <li>Decision-making insights</li>
         </ul>
         </div>
         """, unsafe_allow_html=True)
@@ -230,46 +292,48 @@ def main():
     with col4:
         st.metric("Success Rate", "100%", help="All endpoints functional")
     
-st.markdown("---")
-st.header("Quick Start with Sample Portfolios")
+    st.markdown("---")
+    
+    # Quick Start Portfolios
+    st.header("Quick Start with Sample Portfolios")
 
-col1, col2 = st.columns(2)
+    col1, col2 = st.columns(2)
 
-with col1:
-    st.subheader("Tech Portfolio")
-    st.markdown("""
-    - AAPL: 30%
-    - MSFT: 25%
-    - GOOGL: 20%
-    - NVDA: 15%
-    - TSLA: 10%
-    """)
-    if st.button("Load Tech Portfolio", width='stretch'):
-        from utils.portfolio_manager import set_portfolio
-        set_portfolio(
-            ['AAPL', 'MSFT', 'GOOGL', 'NVDA', 'TSLA'],
-            [0.30, 0.25, 0.20, 0.15, 0.10]
-        )
-        st.success("Tech portfolio loaded!")
-        st.rerun()
+    with col1:
+        st.subheader("Tech Portfolio")
+        st.markdown("""
+        - AAPL: 30%
+        - MSFT: 25%
+        - GOOGL: 20%
+        - NVDA: 15%
+        - TSLA: 10%
+        """)
+        if st.button("Load Tech Portfolio", use_container_width=True):
+            from utils.portfolio_manager import set_portfolio
+            set_portfolio(
+                ['AAPL', 'MSFT', 'GOOGL', 'NVDA', 'TSLA'],
+                [0.30, 0.25, 0.20, 0.15, 0.10]
+            )
+            st.success("✓ Tech portfolio loaded! Go to Dashboard to view metrics.")
+            st.info("Click '📊 Dashboard' button above to see your portfolio")
 
-with col2:
-    st.subheader("Diversified Portfolio")
-    st.markdown("""
-    - SPY: 40%
-    - AGG: 30%
-    - VNQ: 15%
-    - GLD: 10%
-    - TLT: 5%
-    """)
-    if st.button("Load Diversified Portfolio", width='stretch'):
-        from utils.portfolio_manager import set_portfolio
-        set_portfolio(
-            ['SPY', 'AGG', 'VNQ', 'GLD', 'TLT'],
-            [0.40, 0.30, 0.15, 0.10, 0.05]
-        )
-        st.success("Diversified portfolio loaded!")
-        st.rerun()
+    with col2:
+        st.subheader("Diversified Portfolio")
+        st.markdown("""
+        - SPY: 40%
+        - AGG: 30%
+        - VNQ: 15%
+        - GLD: 10%
+        - TLT: 5%
+        """)
+        if st.button("Load Diversified Portfolio", use_container_width=True):
+            from utils.portfolio_manager import set_portfolio
+            set_portfolio(
+                ['SPY', 'AGG', 'VNQ', 'GLD', 'TLT'],
+                [0.40, 0.30, 0.15, 0.10, 0.05]
+            )
+            st.success("✓ Diversified portfolio loaded! Go to Dashboard to view metrics.")
+            st.info("Click '📊 Dashboard' button above to see your portfolio")
     
     st.markdown("---")
     
@@ -280,9 +344,13 @@ with col2:
     
     with nav_col1:
         st.markdown("""
+        **Start Here:**
+        
+        0. **Dashboard** 📊 - Portfolio overview & key metrics at-a-glance
+        
         **Core Analysis Pages:**
         
-        1. **Portfolio Insights** 💡 - Start here for executive summary
+        1. **Portfolio Insights** 💡 - Comprehensive health assessment
         2. **Portfolio Analysis** 📈 - Optimization & composition
         3. **Risk Analytics** ⚠️ - VaR, stress testing, volatility
         4. **Correlation Analytics** 🔗 - Diversification analysis
@@ -295,7 +363,11 @@ with col2:
         5. **Advanced Analytics** 🎯 - Factor analysis & attribution
         6. **Behavioral Analysis** 🧠 - Bias detection & sentiment
         
-        Use the sidebar to navigate between pages.
+        **Recommended Flow:**
+        - Load or enter portfolio
+        - Check Dashboard for quick overview
+        - Review Insights for detailed recommendations
+        - Visit specific analysis pages as needed
         """)
     
     st.markdown("---")
@@ -326,8 +398,9 @@ with col2:
     st.markdown("---")
     st.markdown("""
     <div style='text-align: center; color: #666; padding: 2rem;'>
-        <p><strong>Built with FastAPI + Streamlit • Powered by FMP API • Version 4.1.0</strong></p>
+        <p><strong>Built with FastAPI + Streamlit • Powered by FMP API • Version 4.2.0</strong></p>
         <p><small>Real market data • Institutional analytics • Production-ready backend</small></p>
+        <p><small>7 Analysis Pages • 30+ API Endpoints • Comprehensive UX Improvements</small></p>
     </div>
     """, unsafe_allow_html=True)
 

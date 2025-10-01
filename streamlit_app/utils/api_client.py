@@ -7,33 +7,16 @@ import requests
 import streamlit as st
 from typing import List, Dict, Any, Optional
 import logging
+import time
+from utils.request_logger import request_logger
 
 logger = logging.getLogger(__name__)
 
 class RiskAnalysisAPIClient:
     """Client for minimal_api.py (Port 8001)"""
     
-    def __init__(self, base_url: str = "http://localhost:8001"):
+    def __init__(self, base_url="http://localhost:8001"):
         self.base_url = base_url
-        self.timeout = 30  # 30 second timeout for complex analytics
-    
-    def _post(self, endpoint: str, data: dict) -> Optional[Dict[str, Any]]:
-        """Make POST request with error handling"""
-        try:
-            response = requests.post(
-                f"{self.base_url}{endpoint}",
-                json=data,
-                timeout=self.timeout
-            )
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.Timeout:
-            st.error(f"Request timed out after {self.timeout}s. Try reducing portfolio size.")
-            return None
-        except requests.exceptions.RequestException as e:
-            st.error(f"API Error: {str(e)}")
-            logger.error(f"API call failed: {endpoint}, Error: {e}")
-            return None
     
     def _get(self, endpoint: str) -> Optional[Dict[str, Any]]:
         """Make GET request with error handling"""
@@ -46,6 +29,41 @@ class RiskAnalysisAPIClient:
             return response.json()
         except requests.exceptions.RequestException as e:
             st.error(f"API Error: {str(e)}")
+            return None
+    
+    # In utils/api_client.py, update the _post method around line 46-52:
+
+    def _post(self, endpoint: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Make POST request with error handling"""
+        request_logger.log_request(endpoint, data)
+        
+        start_time = time.time()
+        try:
+            response = requests.post(
+                f"{self.base_url}{endpoint}",
+                json=data,
+                timeout=30
+            )
+            duration = time.time() - start_time
+            
+            response.raise_for_status()
+            
+            # FIX: Wrap json() in try-except
+            try:
+                result = response.json()
+            except ValueError as e:
+                request_logger.log_response(endpoint, False, duration, f"Invalid JSON: {str(e)}")
+                logger.error(f"Invalid JSON response: {str(e)}")
+                return None
+            
+            # Log success
+            request_logger.log_response(endpoint, True, duration)
+            return result
+            
+        except requests.exceptions.RequestException as e:
+            duration = time.time() - start_time
+            request_logger.log_response(endpoint, False, duration, str(e))
+            logger.error(f"POST request failed: {str(e)}")
             return None
     
     # Health & Status
@@ -68,7 +86,8 @@ class RiskAnalysisAPIClient:
         return self._post("/optimize", {
             "symbols": symbols,
             "method": method,
-            "period": period
+            "period": period,
+            "use_real_data": True
         })
     
     # Risk Analysis
@@ -82,7 +101,8 @@ class RiskAnalysisAPIClient:
         return self._post("/analyze", {
             "symbols": symbols,
             "weights": weights,
-            "period": period
+            "period": period,
+            "use_real_data": True
         })
     
     def calculate_var(
@@ -95,7 +115,8 @@ class RiskAnalysisAPIClient:
         return self._post("/var", {
             "symbols": symbols,
             "weights": weights,
-            "confidence_level": confidence_level
+            "confidence_level": confidence_level,
+            "use_real_data": True
         })
     
     def stress_test(
@@ -106,7 +127,8 @@ class RiskAnalysisAPIClient:
         """Run stress test scenarios"""
         return self._post("/stress", {
             "symbols": symbols,
-            "weights": weights
+            "weights": weights,
+            "use_real_data": True
         })
     
     # Advanced Analytics
@@ -120,7 +142,8 @@ class RiskAnalysisAPIClient:
         return self._post("/risk-attribution", {
             "symbols": symbols,
             "weights": weights,
-            "period": period
+            "period": period,
+            "use_real_data": True
         })
     
     def performance_attribution(
@@ -135,7 +158,8 @@ class RiskAnalysisAPIClient:
             "symbols": symbols,
             "weights": weights,
             "benchmark": benchmark,
-            "period": period
+            "period": period,
+            "use_real_data": True
         })
     
     def advanced_analytics(
@@ -148,7 +172,8 @@ class RiskAnalysisAPIClient:
         return self._post("/advanced-analytics", {
             "symbols": symbols,
             "weights": weights,
-            "period": period
+            "period": period,
+            "use_real_data": True
         })
     
     # Correlation Analysis
@@ -160,7 +185,8 @@ class RiskAnalysisAPIClient:
         """Basic correlation analysis"""
         return self._post("/correlation-analysis", {
             "symbols": symbols,
-            "period": period
+            "period": period,
+            "use_real_data": True
         })
     
     def rolling_correlations(
@@ -173,7 +199,8 @@ class RiskAnalysisAPIClient:
         return self._post("/rolling-correlations", {
             "symbols": symbols,
             "window_size": window_size,
-            "period": period
+            "period": period,
+            "use_real_data": True
         })
     
     def regime_correlations(
@@ -186,7 +213,8 @@ class RiskAnalysisAPIClient:
         return self._post("/regime-correlations", {
             "symbols": symbols,
             "regime_method": regime_method,
-            "period": period
+            "period": period,
+            "use_real_data": True
         })
     
     def correlation_clustering(
@@ -197,7 +225,8 @@ class RiskAnalysisAPIClient:
         """Hierarchical clustering of correlations"""
         return self._post("/correlation-clustering", {
             "symbols": symbols,
-            "period": period
+            "period": period,
+            "use_real_data": True
         })
     
     def correlation_network(
@@ -208,7 +237,8 @@ class RiskAnalysisAPIClient:
         """Network topology analysis"""
         return self._post("/correlation-network", {
             "symbols": symbols,
-            "period": period
+            "period": period,
+            "use_real_data": True
         })
     
     def comprehensive_correlation(
@@ -219,7 +249,8 @@ class RiskAnalysisAPIClient:
         """Integrated correlation analysis"""
         return self._post("/comprehensive-correlation", {
             "symbols": symbols,
-            "period": period
+            "period": period,
+            "use_real_data": True
         })
     
     # Forecasting & Regime
@@ -231,7 +262,8 @@ class RiskAnalysisAPIClient:
         """Return forecasting"""
         return self._post("/forecast", {
             "symbols": symbols,
-            "period": period
+            "period": period,
+            "use_real_data": True
         })
     
     def regime_analysis_hmm(
@@ -242,7 +274,8 @@ class RiskAnalysisAPIClient:
         """HMM regime detection"""
         return self._post("/regime-hmm", {
             "symbol": symbol,
-            "period": period
+            "period": period,
+            "use_real_data": True
         })
     
     def regime_analysis_volatility(
@@ -253,7 +286,8 @@ class RiskAnalysisAPIClient:
         """Volatility-based regime analysis"""
         return self._post("/regime-volatility", {
             "symbol": symbol,
-            "period": period
+            "period": period,
+            "use_real_data": True
         })
     
     def forecast_volatility_garch(
@@ -356,6 +390,17 @@ class BehavioralAPIClient:
         return self._post("/assess-profile", {
             "conversation_messages": conversation_messages
         })
+    
+    def comprehensive_behavioral_analysis(
+        self,
+        conversation_messages: List[Dict[str, str]],
+        symbols: Optional[List[str]] = None
+    ) -> Optional[Dict[str, Any]]:
+        """Run all behavioral analyses"""
+        data = {"conversation_messages": conversation_messages}
+        if symbols:
+            data["symbols"] = symbols
+        return self._post("/comprehensive-behavioral", data)
 
 
 # Singleton instances for reuse

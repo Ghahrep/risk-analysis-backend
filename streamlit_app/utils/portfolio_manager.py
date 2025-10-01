@@ -25,7 +25,29 @@ def set_portfolio(symbols, weights):
     st.session_state['portfolio_symbols'] = symbols
     st.session_state['portfolio_weights'] = weights
 
-def normalize_weights(weights):
-    """Normalize weights to sum to 1.0"""
+def normalize_weights(weights: list) -> list:
+    """
+    Normalize weights to sum to 1.0
+    
+    Args:
+        weights: List of numerical weights
+        
+    Returns:
+        List of normalized weights summing to 1.0
+        
+    Raises:
+        ValueError: If weights list is empty or sums to zero
+    """
+    # Check for empty list
+    if not weights or len(weights) == 0:
+        raise ValueError("Cannot normalize empty weights list")
+    
+    # Calculate sum
     total = sum(weights)
-    return [w/total for w in weights] if total > 0 else weights
+    
+    # Check for zero sum
+    if total == 0 or abs(total) < 1e-10:
+        raise ValueError("Cannot normalize weights that sum to zero")
+    
+    # Normalize and return
+    return [w / total for w in weights]
