@@ -269,14 +269,9 @@ def main():
         )
         
         st.markdown("---")
-        st.markdown("### 💬 Feedback")
-        st.markdown(
-            """
-            Help improve this tool:
-            - [Share feedback](https://forms.gle/oMgA13S8rEGX4wwf8)
-            - [Report issues](https://github.com/Ghahrep/risk-analysis-backend/issues)
-            """
-        )
+        st.markdown("### 📚 Help & Feedback")
+        st.markdown("[Quick Start Guide](https://docs.google.com/document/d/1BX93dy0fOcFdeiiXxT3T7XlDgdC4CRv5Ehp72linzIc/view)")
+        st.markdown("[Give Feedback](https://forms.gle/87hpD7gvPVQnsPfc7)")
     
     symbols, weights = get_portfolio()
     

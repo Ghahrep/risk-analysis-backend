@@ -202,13 +202,10 @@ def main():
         st.markdown("---")
         
         # Feedback section
-        st.markdown("### 📋 Feedback")
-        st.caption("Help us improve")
-        
-        feedback_url = "https://forms.gle/oMgA13S8rEGX4wwf8"
-        st.markdown(f"[📝 Share Feedback]({feedback_url})")
-        
-        st.caption("Takes 2 minutes • Anonymous")
+        st.markdown("---")
+        st.markdown("### 📚 Help & Feedback")
+        st.markdown("[Quick Start Guide](https://docs.google.com/document/d/1BX93dy0fOcFdeiiXxT3T7XlDgdC4CRv5Ehp72linzIc/view)")
+        st.markdown("[Give Feedback](https://forms.gle/87hpD7gvPVQnsPfc7)")
 
     symbols, weights = get_portfolio()
       
