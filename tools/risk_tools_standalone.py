@@ -689,9 +689,14 @@ def _generate_synthetic_portfolio_returns(
 def _apply_stress_scenario(returns: pd.Series, shock_magnitude: float) -> Dict[str, Any]:
     """Apply stress scenario to return series"""
     try:
-        # Apply shock to the return series
+        # Apply shock as a portfolio-wide event (not just last day)
+        # Simulate a 5-day crisis period
+        crisis_duration = min(5, len(returns))
         stressed_returns = returns.copy()
-        stressed_returns.iloc[-1] = shock_magnitude
+        
+        # Distribute the shock over the crisis period
+        daily_shock = shock_magnitude / crisis_duration
+        stressed_returns.iloc[-crisis_duration:] = daily_shock
         
         # Calculate metrics
         total_return = (1 + stressed_returns).prod() - 1
@@ -704,15 +709,20 @@ def _apply_stress_scenario(returns: pd.Series, shock_magnitude: float) -> Dict[s
         drawdown = (cumulative - running_max) / running_max
         max_drawdown = drawdown.min()
         
+        # Portfolio loss is based on the cumulative effect of the shock
+        portfolio_loss_pct = shock_magnitude * 100
+        
         return {
             'shock_magnitude_pct': shock_magnitude * 100,
             'total_return_pct': total_return * 100,
-            'total_loss_pct': min(0, total_return * 100),
+            'total_loss_pct': portfolio_loss_pct,  # Use direct shock impact
+            'portfolio_loss_pct': portfolio_loss_pct,  # Add this for frontend
             'max_daily_loss_pct': max_daily_loss * 100,
             'annualized_volatility_pct': volatility * 100,
             'max_drawdown_pct': max_drawdown * 100,
             'negative_days': (stressed_returns < 0).sum(),
-            'recovery_estimate_days': max(1, abs(shock_magnitude) * 252)
+            'recovery_estimate_days': max(1, abs(shock_magnitude) * 252),
+            'description': f'Stress scenario with {abs(shock_magnitude)*100:.1f}% shock'
         }
         
     except Exception as e:

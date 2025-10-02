@@ -755,9 +755,9 @@ async def risk_attribution_analysis(request: dict):
             
         except Exception as e:
             logger.warning(f"Factor analysis failed: {e}, using estimates")
-            total_risk = 15.0
-            systematic_risk = 11.25
-            idiosyncratic_risk = 3.75
+            total_risk = 0.15
+            systematic_risk = 0.1125
+            idiosyncratic_risk = 0.0375
         
         return {
             "status": "success",
@@ -793,11 +793,11 @@ async def performance_attribution_analysis(request: dict):
         return {
             "status": "success",
             "performance_attribution": {
-                "total_return_pct": 12.5,  # No multiplication by 100
-                "alpha_pct": 2.5,
+                "total_return_pct": 0.125,  # Changed from 12.5
+                "alpha_pct": 0.025,  # Changed from 2.5
                 "risk_adjusted_metrics": {
-                    "tracking_error": 5.0,
-                    "information_ratio": 0.5
+                    "tracking_error": 0.05,  # Changed from 5.0
+                    "information_ratio": 0.5  # This one is already correct
                 }
             },
             "timestamp": datetime.now().isoformat()
