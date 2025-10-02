@@ -301,6 +301,8 @@ async def portfolio_optimization(request: dict):
         if not symbols:
             raise HTTPException(status_code=400, detail="Symbols required")
         
+        logger.info(f"Optimization request: {symbols}, method={method}")
+        
         result = await optimize_portfolio(
             symbols=symbols,
             method=method,
@@ -308,29 +310,47 @@ async def portfolio_optimization(request: dict):
             risk_free_rate=risk_free_rate
         )
         
-        # Extract data from result object
+        logger.info(f"Optimization result type: {type(result)}")
+        logger.info(f"Optimization result: {result}")
+        
+        # Handle different result formats
         if hasattr(result, '__dict__'):
             result_dict = result.__dict__
-        else:
+        elif isinstance(result, dict):
             result_dict = result
+        else:
+            logger.error(f"Unexpected result type: {type(result)}")
+            raise HTTPException(status_code=500, detail="Unexpected optimization result format")
         
-        # Format response to match frontend expectations
+        # Extract weights - try multiple possible locations
+        optimized_weights = (
+            result_dict.get('optimized_weights') or 
+            result_dict.get('weights') or 
+            result_dict.get('optimal_weights') or
+            {}
+        )
+        
+        if not optimized_weights:
+            logger.error(f"No weights found in result: {result_dict.keys()}")
+            raise HTTPException(status_code=500, detail="Optimization produced no weights")
+        
+        # Build response
         response = {
             "status": "success",
-            "optimized_weights": result_dict.get('optimized_weights', {}),
-            "expected_return": result_dict.get('expected_return', 0),
-            "volatility": result_dict.get('volatility', 0),
-            "sharpe_ratio": result_dict.get('sharpe_ratio', 0),
-            "max_drawdown": result_dict.get('max_drawdown', 0),
+            "optimized_weights": optimized_weights,
+            "expected_return": float(result_dict.get('expected_return', 0)),
+            "volatility": float(result_dict.get('volatility', 0)),
+            "sharpe_ratio": float(result_dict.get('sharpe_ratio', 0)),
+            "max_drawdown": float(result_dict.get('max_drawdown', 0)),
             "data_source": result_dict.get('data_source', 'Unknown'),
             "timestamp": datetime.now().isoformat()
         }
         
-        logger.info(f"Optimization complete: {len(response['optimized_weights'])} weights returned")
+        logger.info(f"Optimization response: {len(response['optimized_weights'])} weights, sharpe={response['sharpe_ratio']}")
         return response
         
     except Exception as e:
-        logger.error(f"Portfolio optimization failed: {e}")
+        logger.exception(f"Portfolio optimization failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/portfolio-risk")
