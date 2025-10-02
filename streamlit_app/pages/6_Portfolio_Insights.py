@@ -267,6 +267,17 @@ def main():
             format_func=lambda x: x.replace("year", " Year").replace("s", "s").title(),
             label_visibility="collapsed"
         )
+        
+        st.markdown("---")
+        st.markdown("### 💬 Feedback")
+        st.markdown(
+            """
+            Help improve this tool:
+            - [Share feedback](https://forms.gle/oMgA13S8rEGX4wwf8)
+            - [Report issues](https://github.com/Ghahrep/risk-analysis-backend/issues)
+            """,
+            unsafe_allow_html=True
+        )
     
     symbols, weights = get_portfolio()
     

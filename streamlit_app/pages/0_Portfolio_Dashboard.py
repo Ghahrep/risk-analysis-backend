@@ -217,6 +217,17 @@ def main():
                 st.success("✓ Loaded!")
                 time.sleep(1)
                 st.rerun()
+        
+        st.markdown("---")
+        
+        # Feedback section - NEW
+        st.markdown("### 📋 Feedback")
+        st.caption("Help us improve")
+        
+        feedback_url = "https://forms.gle/oMgA13S8rEGX4wwf8"
+        st.markdown(f"[📝 Share Feedback]({feedback_url})")
+        
+        st.caption("Takes 2 minutes • Anonymous")
     
     # Get current portfolio
     symbols, weights = get_portfolio()

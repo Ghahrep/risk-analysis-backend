@@ -198,6 +198,19 @@ def main():
         
         if st.button("💡 Get Health Report", use_container_width=True):
             st.switch_page("pages/6_Portfolio_Insights.py")
+        
+        st.markdown("---")
+        
+        # Feedback section
+        st.markdown("### 📋 Feedback")
+        st.caption("Help us improve")
+        
+        feedback_url = "https://forms.gle/oMgA13S8rEGX4wwf8"
+        st.markdown(f"[📝 Share Feedback]({feedback_url})")
+        
+        st.caption("Takes 2 minutes • Anonymous")
+
+symbols, weights = get_portfolio()
     
     symbols, weights = get_portfolio()
     

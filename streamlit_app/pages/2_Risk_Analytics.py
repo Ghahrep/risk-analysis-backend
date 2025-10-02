@@ -192,6 +192,17 @@ def main():
             format_func=lambda x: x.replace("months", " Months").replace("year", " Year").replace("s", "s").title(),
             label_visibility="collapsed"
         )
+        
+        st.markdown("---")
+        
+        # Feedback section
+        st.markdown("### 📋 Feedback")
+        st.caption("Help us improve")
+        
+        feedback_url = "https://forms.gle/oMgA13S8rEGX4wwf8"
+        st.markdown(f"[📝 Share Feedback]({feedback_url})")
+        
+        st.caption("Takes 2 minutes • Anonymous")
     
     symbols, weights = get_portfolio()
     
