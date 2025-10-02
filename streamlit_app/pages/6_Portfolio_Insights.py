@@ -275,8 +275,7 @@ def main():
             Help improve this tool:
             - [Share feedback](https://forms.gle/oMgA13S8rEGX4wwf8)
             - [Report issues](https://github.com/Ghahrep/risk-analysis-backend/issues)
-            """,
-            unsafe_allow_html=True
+            """
         )
     
     symbols, weights = get_portfolio()
