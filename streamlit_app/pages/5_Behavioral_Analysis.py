@@ -160,25 +160,28 @@ def main():
             with st.spinner("🧠 Analyzing for cognitive biases..."):
                 symbols, weights = get_portfolio()
                 
-                result = safe_api_call(
-                    lambda: api_client.analyze_biases(
-                        st.session_state.conversation_history,
-                        symbols if symbols else None
-                    ),
-                    error_context="bias detection"
-                )
+                # Debug: Check what we're sending
+                messages_to_send = st.session_state.conversation_history
                 
-                if result:
-                    st.session_state['bias_result'] = result
-                    st.session_state.conversation_history.append({
-                        "role": "assistant",
-                        "content": "Analysis complete"
-                    })
-                    st.success("✓ Analysis complete!")
-                    time.sleep(0.5)
-                    st.rerun()
+                # Ensure all messages have required fields
+                valid_messages = []
+                for msg in messages_to_send:
+                    if isinstance(msg, dict) and 'content' in msg:
+                        valid_messages.append({
+                            'role': msg.get('role', 'user'),
+                            'content': str(msg['content'])
+                        })
+                
+                if not valid_messages:
+                    st.error("No valid messages to analyze")
                 else:
-                    st.error("❌ Analysis failed. Try being more specific about your investment situation.")
+                    result = safe_api_call(
+                        lambda: api_client.analyze_biases(
+                            valid_messages,
+                            symbols if symbols else None
+                        ),
+                        error_context="bias detection"
+                    )
     
     # Display results
     if 'bias_result' in st.session_state:
