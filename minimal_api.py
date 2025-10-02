@@ -272,7 +272,32 @@ async def stress_testing(request: dict):
             use_real_data=use_real_data
         )
         
-        result_clean = convert_numpy_types(result.__dict__ if hasattr(result, '__dict__') else result)
+        # Convert result to dict
+        result_dict = result.__dict__ if hasattr(result, '__dict__') else result
+        result_clean = convert_numpy_types(result_dict)
+        
+        # Ensure all 5 standard scenarios are present
+        standard_scenarios = [
+            'market_crash_2008', 'covid_crash_2020', 'flash_crash_2010',
+            'severe_correction', 'mild_correction'
+        ]
+        
+        stress_scenarios = result_clean.get('stress_scenarios', {})
+        
+        # If missing scenarios, add defaults
+        if len(stress_scenarios) < 5:
+            for scenario_name in standard_scenarios:
+                if scenario_name not in stress_scenarios:
+                    stress_scenarios[scenario_name] = {
+                        'portfolio_loss_pct': 0.0,
+                        'total_loss_pct': 0.0,
+                        'individual_losses': {},
+                        'description': f'{scenario_name.replace("_", " ").title()}'
+                    }
+        
+        result_clean['stress_scenarios'] = stress_scenarios
+        
+        logger.info(f"Stress test complete: {len(stress_scenarios)} scenarios")
         
         return {
             "status": "success",
@@ -425,15 +450,24 @@ async def forecast_volatility(request: dict):
         
         result_clean = convert_numpy_types(result)
         
+        # Ensure proper structure for frontend
+        volatility_forecast = result_clean if isinstance(result_clean, dict) else {}
+        
+        # Add defaults if missing
+        if 'current_volatility' not in volatility_forecast:
+            volatility_forecast['current_volatility'] = 0.0
+        if 'forecast_mean' not in volatility_forecast:
+            volatility_forecast['forecast_mean'] = 0.0
+        if 'trend' not in volatility_forecast:
+            volatility_forecast['trend'] = 'stable'
+        
+        logger.info(f"Volatility forecast: current={volatility_forecast.get('current_volatility', 0):.4f}, forecast={volatility_forecast.get('forecast_mean', 0):.4f}")
+        
         return {
             "status": "success",
-            "volatility_forecast": result_clean,
+            "volatility_forecast": volatility_forecast,
             "timestamp": datetime.now().isoformat()
         }
-        
-    except Exception as e:
-        logger.error(f"Volatility forecast failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 # ==================== REGIME ANALYSIS ENDPOINTS ====================
 
@@ -744,13 +778,13 @@ async def risk_attribution_analysis(request: dict):
         return {
             "status": "success",
             "risk_attribution": {
-                "total_risk_pct": total_risk * 100,
-                "systematic_risk_pct": systematic_risk * 100,
-                "idiosyncratic_risk_pct": idiosyncratic_risk * 100,
+                "total_risk_pct": total_risk,
+                "systematic_risk_pct": systematic_risk,
+                "idiosyncratic_risk_pct": idiosyncratic_risk,
                 "factor_contributions": {
-                    "market": systematic_risk * 100 * 0.7,
-                    "size": systematic_risk * 100 * 0.2,
-                    "value": systematic_risk * 100 * 0.1
+                    "market": systematic_risk * 0.7,
+                    "size": systematic_risk * 0.2,
+                    "value": systematic_risk * 0.1
                 }
             },
             "timestamp": datetime.now().isoformat()

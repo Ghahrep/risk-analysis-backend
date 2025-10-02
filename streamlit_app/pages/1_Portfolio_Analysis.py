@@ -544,6 +544,7 @@ if __name__ == "__main__":
         main()
     except Exception as e:
         st.error("An unexpected error occurred in Portfolio Analysis")
-        request_logger.logger.exception("Unhandled exception in Portfolio Analysis")
+        import logging
+        logging.exception("Unhandled exception in Portfolio Analysis")
         with st.expander("🔍 Error Details"):
             st.code(str(e))
