@@ -68,6 +68,11 @@ def main():
         
         if st.button("Run Stress Test", use_container_width=True):
             st.switch_page("pages/2_Risk_Analytics.py")
+        
+        st.markdown("---")
+        st.markdown("### 📚 Help & Feedback")
+        st.markdown("[Quick Start Guide](https://docs.google.com/document/d/1BX93dy0fOcFdeiiXxT3T7XlDgdC4CRv5Ehp72linzIc/view)")
+        st.markdown("[Give Feedback](https://forms.gle/87hpD7gvPVQnsPfc7)")
 
     symbols, weights = get_portfolio()
 
@@ -232,10 +237,6 @@ def main():
             if st.button("🔥 Run Stress Test", use_container_width=True):
                 st.switch_page("pages/2_Risk_Analytics.py")
         
-        st.markdown("---")
-        st.markdown("### 📚 Help & Feedback")
-        st.markdown("[Quick Start Guide](bit.ly/4gWHEMu)")
-        st.markdown("[Give Feedback](https://forms.gle/87hpD7gvPVQnsPfc7)")
         # Holdings table
         st.markdown("---")
         st.markdown("#### Holdings Detail")
