@@ -310,43 +310,22 @@ async def portfolio_optimization(request: dict):
             risk_free_rate=risk_free_rate
         )
         
-        logger.info(f"Optimization result type: {type(result)}")
-        logger.info(f"Optimization result: {result}")
+        if not result.success:
+            raise HTTPException(status_code=500, detail=result.error or "Optimization failed")
         
-        # Handle different result formats
-        if hasattr(result, '__dict__'):
-            result_dict = result.__dict__
-        elif isinstance(result, dict):
-            result_dict = result
-        else:
-            logger.error(f"Unexpected result type: {type(result)}")
-            raise HTTPException(status_code=500, detail="Unexpected optimization result format")
-        
-        # Extract weights - try multiple possible locations
-        optimized_weights = (
-            result_dict.get('optimized_weights') or 
-            result_dict.get('weights') or 
-            result_dict.get('optimal_weights') or
-            {}
-        )
-        
-        if not optimized_weights:
-            logger.error(f"No weights found in result: {result_dict.keys()}")
-            raise HTTPException(status_code=500, detail="Optimization produced no weights")
-        
-        # Build response
+        # Map OptimizationResult to frontend format
         response = {
             "status": "success",
-            "optimized_weights": optimized_weights,
-            "expected_return": float(result_dict.get('expected_return', 0)),
-            "volatility": float(result_dict.get('volatility', 0)),
-            "sharpe_ratio": float(result_dict.get('sharpe_ratio', 0)),
-            "max_drawdown": float(result_dict.get('max_drawdown', 0)),
-            "data_source": result_dict.get('data_source', 'Unknown'),
+            "optimized_weights": result.optimal_weights,  # <-- KEY FIX: optimal_weights not optimized_weights
+            "expected_return": float(result.expected_return),
+            "volatility": float(result.expected_volatility),
+            "sharpe_ratio": float(result.sharpe_ratio),
+            "max_drawdown": 0.0,  # Not in OptimizationResult, use default
+            "data_source": result.data_source,
             "timestamp": datetime.now().isoformat()
         }
         
-        logger.info(f"Optimization response: {len(response['optimized_weights'])} weights, sharpe={response['sharpe_ratio']}")
+        logger.info(f"Optimization response: {len(response['optimized_weights'])} weights, sharpe={response['sharpe_ratio']:.2f}")
         return response
         
     except Exception as e:
