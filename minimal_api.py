@@ -452,6 +452,10 @@ async def forecast_volatility(request: dict):
             "volatility_forecast": volatility_forecast,
             "timestamp": datetime.now().isoformat()
         }
+    
+    except Exception as e:  # ADD THIS BLOCK
+        logger.error(f"Volatility forecast failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ==================== REGIME ANALYSIS ENDPOINTS ====================
 
