@@ -307,7 +307,7 @@ class BehavioralAPIClient:
         symbols: Optional[List[str]] = None
     ) -> Optional[Dict[str, Any]]:
         """Detect cognitive biases in conversation"""
-        data = {"conversation_history": conversation_messages}  # Match API expectation
+        data = {"conversation_messages": conversation_messages}  # Match API expectation
         if symbols:
             data["symbols"] = symbols
         return self._post("/analyze-biases", data)
