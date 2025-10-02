@@ -2,7 +2,6 @@
 Risk Analysis Platform - Streamlit Dashboard
 Main entry point and marketing/welcome page
 """
-
 import streamlit as st
 import sys
 from pathlib import Path
@@ -11,6 +10,19 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent))
 
 from utils.api_client import get_risk_api_client, get_behavioral_api_client
+from utils.portfolio_manager import set_portfolio, get_portfolio, initialize_portfolio
+
+# Initialize portfolio system
+initialize_portfolio()
+
+# Auto-load sample portfolio on first visit
+if 'first_visit' not in st.session_state:
+    st.session_state.first_visit = False
+    set_portfolio(
+        ['AAPL', 'MSFT', 'GOOGL', 'NVDA'],
+        [0.25, 0.25, 0.25, 0.25]
+    )
+    st.session_state.show_welcome_banner = True
 
 # Page configuration
 st.set_page_config(
@@ -118,6 +130,16 @@ def main():
     st.markdown('<div class="main-header">📊 Risk Analysis Platform</div>', unsafe_allow_html=True)
     st.markdown('<div class="sub-header">Institutional-Grade Portfolio Analytics & Insights</div>', unsafe_allow_html=True)
     
+    # Welcome banner for first-time visitors
+    if st.session_state.get('show_welcome_banner', False):
+        col1, col2 = st.columns([6, 1])
+        with col1:
+            st.info("👋 **Welcome!** We've loaded a sample tech portfolio (AAPL, MSFT, GOOGL, NVDA) so you can see the platform in action. Click '📊 Dashboard' below to view it, or replace with your own holdings anytime.")
+        with col2:
+            if st.button("Dismiss"):
+                st.session_state.show_welcome_banner = False
+                st.rerun()
+    
     # Primary CTA - Dashboard First
     st.markdown("""
     <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
@@ -129,7 +151,7 @@ def main():
     </div>
     """, unsafe_allow_html=True)
     
-    # Quick Actions Bar - Dashboard Featured
+    # Quick Actions Bar
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         if st.button("📊 Dashboard", use_container_width=True, type="primary"):
@@ -296,9 +318,9 @@ def main():
     
     # Quick Start Portfolios
     st.header("Quick Start with Sample Portfolios")
-
+    
     col1, col2 = st.columns(2)
-
+    
     with col1:
         st.subheader("Tech Portfolio")
         st.markdown("""
@@ -309,14 +331,13 @@ def main():
         - TSLA: 10%
         """)
         if st.button("Load Tech Portfolio", use_container_width=True):
-            from utils.portfolio_manager import set_portfolio
             set_portfolio(
                 ['AAPL', 'MSFT', 'GOOGL', 'NVDA', 'TSLA'],
                 [0.30, 0.25, 0.20, 0.15, 0.10]
             )
             st.success("✓ Tech portfolio loaded! Go to Dashboard to view metrics.")
             st.info("Click '📊 Dashboard' button above to see your portfolio")
-
+    
     with col2:
         st.subheader("Diversified Portfolio")
         st.markdown("""
@@ -327,7 +348,6 @@ def main():
         - TLT: 5%
         """)
         if st.button("Load Diversified Portfolio", use_container_width=True):
-            from utils.portfolio_manager import set_portfolio
             set_portfolio(
                 ['SPY', 'AGG', 'VNQ', 'GLD', 'TLT'],
                 [0.40, 0.30, 0.15, 0.10, 0.05]
