@@ -210,10 +210,8 @@ def main():
         
         st.caption("Takes 2 minutes • Anonymous")
 
-symbols, weights = get_portfolio()
-    
     symbols, weights = get_portfolio()
-    
+      
     # IMPROVED EMPTY STATE
     if not symbols:
         show_empty_state(
