@@ -464,4 +464,6 @@ if __name__ == "__main__":
     logger.info("=" * 60)
     
     # Run the API server
-    uvicorn.run(app, host="0.0.0.0", port=8003, log_level="info")
+    import os
+    port = int(os.environ.get("PORT", 8003))
+    uvicorn.run(app, host="0.0.0.0", port=port)
