@@ -6,7 +6,7 @@ Following proven minimal API pattern with all behavioral endpoints.
 Comprehensive behavioral finance analysis with real FMP market data integration.
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 import uvicorn
 import logging
@@ -36,7 +36,7 @@ def convert_numpy_types(obj):
     return obj
 
 @app.post("/analyze-biases")
-async def analyze_behavioral_biases_endpoint(request: dict):
+async def analyze_behavioral_biases_endpoint(request_data: Request):
     """
     Comprehensive behavioral bias analysis with real FMP market data
     
@@ -54,20 +54,57 @@ async def analyze_behavioral_biases_endpoint(request: dict):
     try:
         logger.info("Starting behavioral bias analysis")
         
+        # Parse request body
+        request = await request_data.json()
+        
         # Import here to avoid startup issues
         from tools.behavioral_tools_standalone import analyze_behavioral_biases_with_real_data
         
         # Validate required fields
         if 'conversation_messages' not in request:
-            raise HTTPException(status_code=400, detail="conversation_messages field is required")
+            logger.error("Missing conversation_messages field")
+            raise HTTPException(
+                status_code=400, 
+                detail="conversation_messages field is required. Expected format: {'conversation_messages': [{'role': 'user', 'content': '...'}]}"
+            )
         
         conversation_messages = request.get('conversation_messages', [])
         symbols = request.get('symbols', [])
         period = request.get('period', '1year')
         use_real_data = request.get('use_real_data', True)
         
+        # Validate conversation_messages is not empty
         if not conversation_messages:
-            raise HTTPException(status_code=400, detail="At least one conversation message is required")
+            logger.error("Empty conversation_messages")
+            raise HTTPException(
+                status_code=400, 
+                detail="At least one conversation message is required"
+            )
+        
+        # Validate conversation_messages format
+        if not isinstance(conversation_messages, list):
+            logger.error(f"conversation_messages is not a list: {type(conversation_messages)}")
+            raise HTTPException(
+                status_code=400,
+                detail="conversation_messages must be a list of message objects"
+            )
+        
+        # Validate each message has required fields
+        for i, msg in enumerate(conversation_messages):
+            if not isinstance(msg, dict):
+                logger.error(f"Message {i} is not a dict: {type(msg)}")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Message {i} must be a dictionary with 'role' and 'content' fields"
+                )
+            if 'content' not in msg:
+                logger.error(f"Message {i} missing content field")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Message {i} is missing required 'content' field"
+                )
+        
+        logger.info(f"Processing {len(conversation_messages)} messages with {len(symbols)} symbols")
         
         # Call behavioral analysis function
         analysis_result = await analyze_behavioral_biases_with_real_data(
@@ -89,12 +126,18 @@ async def analyze_behavioral_biases_endpoint(request: dict):
         
     except HTTPException:
         raise
+    except json.JSONDecodeError as e:
+        logger.error(f"Invalid JSON in request body: {e}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid JSON format: {str(e)}"
+        )
     except Exception as e:
-        logger.error(f"Bias analysis endpoint failed: {e}")
+        logger.error(f"Bias analysis endpoint failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Bias analysis error: {str(e)}")
 
 @app.post("/analyze-sentiment")
-async def analyze_sentiment_endpoint(request: dict):
+async def analyze_sentiment_endpoint(request_data: Request):
     """
     Market sentiment analysis with real FMP market context
     
@@ -111,6 +154,9 @@ async def analyze_sentiment_endpoint(request: dict):
     """
     try:
         logger.info("Starting market sentiment analysis")
+        
+        # Parse request body
+        request = await request_data.json()
         
         # Import here to avoid startup issues
         from tools.behavioral_tools_standalone import analyze_market_sentiment_with_real_data
@@ -152,7 +198,7 @@ async def analyze_sentiment_endpoint(request: dict):
         raise HTTPException(status_code=500, detail=f"Sentiment analysis error: {str(e)}")
 
 @app.post("/assess-profile")
-async def assess_behavioral_profile_endpoint(request: dict):
+async def assess_behavioral_profile_endpoint(request_data: Request):
     """
     Comprehensive behavioral profile assessment with FMP market context
     
@@ -170,6 +216,9 @@ async def assess_behavioral_profile_endpoint(request: dict):
     """
     try:
         logger.info("Starting behavioral profile assessment")
+        
+        # Parse request body
+        request = await request_data.json()
         
         # Import here to avoid startup issues
         from tools.behavioral_tools_standalone import assess_behavioral_profile_with_real_data
@@ -214,7 +263,7 @@ async def assess_behavioral_profile_endpoint(request: dict):
         raise HTTPException(status_code=500, detail=f"Profile assessment error: {str(e)}")
 
 @app.post("/comprehensive-analysis")
-async def comprehensive_behavioral_analysis_endpoint(request: dict):
+async def comprehensive_behavioral_analysis_endpoint(request_data: Request):
     """
     Complete behavioral analysis combining bias detection, sentiment, and profiling
     
@@ -233,6 +282,9 @@ async def comprehensive_behavioral_analysis_endpoint(request: dict):
     """
     try:
         logger.info("Starting comprehensive behavioral analysis")
+        
+        # Parse request body
+        request = await request_data.json()
         
         # Import here to avoid startup issues
         from tools.behavioral_tools_standalone import analyze_conversation_comprehensive
