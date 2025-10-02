@@ -749,7 +749,7 @@ async def risk_attribution_analysis(request: dict):
             avg_beta = np.mean(betas)
             avg_r_squared = np.mean(r_squareds)
             
-            total_risk = 15.0  # Already a percentage
+            total_risk = 0.15  # Already a percentage
             systematic_risk = total_risk * avg_r_squared
             idiosyncratic_risk = total_risk * (1 - avg_r_squared)
             
