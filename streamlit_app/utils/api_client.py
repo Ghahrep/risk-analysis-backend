@@ -8,6 +8,7 @@ import streamlit as st
 from typing import List, Dict, Any, Optional
 import logging
 import time
+import os 
 from utils.request_logger import request_logger
 
 logger = logging.getLogger(__name__)
@@ -316,9 +317,11 @@ class BehavioralAPIClient:
 @st.cache_resource
 def get_risk_api_client():
     """Get cached risk analysis API client"""
-    return RiskAnalysisAPIClient()
+    base_url = os.getenv("RISK_API_URL", "http://localhost:8001")
+    return RiskAnalysisAPIClient(base_url=base_url)
 
 @st.cache_resource
 def get_behavioral_api_client():
     """Get cached behavioral API client"""
-    return BehavioralAPIClient()
+    base_url = os.getenv("BEHAVIORAL_API_URL", "http://localhost:8003")
+    return BehavioralAPIClient(base_url=base_url)
