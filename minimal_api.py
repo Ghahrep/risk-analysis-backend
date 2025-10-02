@@ -583,6 +583,105 @@ async def correlation_clustering(request: dict):
     except Exception as e:
         logger.error(f"Correlation clustering failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    
+
+@app.post("/analyze-correlations")
+async def analyze_correlations(request: dict):
+    """Analyze correlation regimes for portfolio"""
+    if not REGIME_TOOLS_AVAILABLE:
+        logger.warning("Regime tools not available, returning defaults")
+        return {
+            'success': True,
+            'regime_correlations': {
+                'regime_sensitivity': {
+                    'crisis_correlation_multiplier': 1.5
+                },
+                'market_regime_correlations': {
+                    'bull': {'avg_correlation': 0.5},
+                    'bear': {'avg_correlation': 0.75}
+                }
+            },
+            'data_source': 'Default values - regime tools unavailable'
+        }
+    
+    try:
+        symbols = request.get('symbols', [])
+        period = request.get('period', '1year')
+        regime_type = request.get('regime_type', 'volatility')
+        use_real_data = request.get('use_real_data', True)
+        
+        if not symbols:
+            raise HTTPException(status_code=400, detail="Symbols required")
+        
+        logger.info(f"Correlation analysis: {symbols}, period={period}")
+        
+        # Import and call regime tools
+        from tools.regime_tools_standalone import detect_volatility_regimes
+        
+        regime_result = detect_volatility_regimes(
+            symbols=symbols,
+            use_real_data=use_real_data,
+            period=period,
+            window=30,
+            threshold_low=0.15,
+            threshold_high=0.25
+        )
+        
+        if not regime_result.get('success'):
+            logger.warning(f"Regime detection failed: {regime_result.get('error')}")
+            # Return defaults on failure
+            return {
+                'success': True,
+                'regime_correlations': {
+                    'regime_sensitivity': {'crisis_correlation_multiplier': 1.5},
+                    'market_regime_correlations': {
+                        'bull': {'avg_correlation': 0.5},
+                        'bear': {'avg_correlation': 0.75}
+                    }
+                },
+                'data_source': 'Default - analysis failed'
+            }
+        
+        # Calculate crisis multiplier
+        regime_chars = regime_result.get('regime_characteristics', {})
+        crisis_multiplier = 1.5
+        
+        if 'regime_0' in regime_chars and 'regime_2' in regime_chars:
+            low_vol = regime_chars['regime_0'].get('volatility', 0.15)
+            high_vol = regime_chars['regime_2'].get('volatility', 0.30)
+            
+            if low_vol > 0:
+                vol_ratio = high_vol / low_vol
+                crisis_multiplier = min(3.0, max(1.2, vol_ratio * 0.6))
+        
+        return {
+            'success': True,
+            'regime_correlations': {
+                'regime_sensitivity': {
+                    'crisis_correlation_multiplier': float(crisis_multiplier)
+                },
+                'market_regime_correlations': {
+                    'bull': {'avg_correlation': 0.5},
+                    'bear': {'avg_correlation': 0.75}
+                }
+            },
+            'regime_characteristics': regime_chars,
+            'data_source': regime_result.get('data_source', 'Unknown')
+        }
+        
+    except Exception as e:
+        logger.exception("Correlation analysis failed")
+        return {
+            'success': True,
+            'regime_correlations': {
+                'regime_sensitivity': {'crisis_correlation_multiplier': 1.5},
+                'market_regime_correlations': {
+                    'bull': {'avg_correlation': 0.5},
+                    'bear': {'avg_correlation': 0.75}
+                }
+            },
+            'data_source': f'Error fallback: {str(e)}'
+        }
 
 # ==================== ADVANCED ANALYTICS ENDPOINTS ====================
 

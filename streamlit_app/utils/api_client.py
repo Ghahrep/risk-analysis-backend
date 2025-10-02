@@ -265,6 +265,44 @@ class RiskAnalysisAPIClient:
             "period": period
         }
 
+    def analyze_correlations(self, symbols: List[str], period: str = "1year") -> Optional[Dict[str, Any]]:
+        """
+        Analyze correlation regimes for portfolio
+        
+        Args:
+            symbols: List of ticker symbols
+            period: Time period for analysis
+        
+        Returns:
+            Correlation analysis results or None if failed
+        """
+        try:
+            payload = {
+                "symbols": symbols,
+                "period": period,
+                "regime_type": "volatility",
+                "use_real_data": True
+            }
+            
+            response = requests.post(
+                f"{self.base_url}/analyze-correlations",
+                json=payload,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                return response.json()
+            else:
+                logger.error(f"Correlation analysis failed: {response.status_code}")  # Use module-level logger
+                return None
+                
+        except requests.exceptions.Timeout:
+            logger.error("Correlation analysis timed out")
+            return None
+        except Exception as e:
+            logger.error(f"Correlation analysis error: {e}")
+        return None
+
 
 class BehavioralAPIClient:
     """Client for behavioral_complete_api.py (Port 8003)"""

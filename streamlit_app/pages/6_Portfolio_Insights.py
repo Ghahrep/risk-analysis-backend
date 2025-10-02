@@ -365,7 +365,7 @@ def main():
             progress_bar.progress(90)
             
             corr_result = safe_api_call(
-                lambda: api_client.regime_correlations(symbols, "volatility", period),
+                lambda: api_client.analyze_correlations(symbols, period),
                 error_context="correlations"
             )
             
