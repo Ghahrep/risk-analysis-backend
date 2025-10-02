@@ -160,12 +160,9 @@ def main():
             with st.spinner("🧠 Analyzing for cognitive biases..."):
                 symbols, weights = get_portfolio()
                 
-                # Debug: Check what we're sending
-                messages_to_send = st.session_state.conversation_history
-                
-                # Ensure all messages have required fields
+                # Validate and clean messages before sending
                 valid_messages = []
-                for msg in messages_to_send:
+                for msg in st.session_state.conversation_history:
                     if isinstance(msg, dict) and 'content' in msg:
                         valid_messages.append({
                             'role': msg.get('role', 'user'),
