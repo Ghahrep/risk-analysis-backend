@@ -308,11 +308,26 @@ async def portfolio_optimization(request: dict):
             risk_free_rate=risk_free_rate
         )
         
-        return {
+        # Extract data from result object
+        if hasattr(result, '__dict__'):
+            result_dict = result.__dict__
+        else:
+            result_dict = result
+        
+        # Format response to match frontend expectations
+        response = {
             "status": "success",
-            "optimization_results": result.__dict__ if hasattr(result, '__dict__') else result,
+            "optimized_weights": result_dict.get('optimized_weights', {}),
+            "expected_return": result_dict.get('expected_return', 0),
+            "volatility": result_dict.get('volatility', 0),
+            "sharpe_ratio": result_dict.get('sharpe_ratio', 0),
+            "max_drawdown": result_dict.get('max_drawdown', 0),
+            "data_source": result_dict.get('data_source', 'Unknown'),
             "timestamp": datetime.now().isoformat()
         }
+        
+        logger.info(f"Optimization complete: {len(response['optimized_weights'])} weights returned")
+        return response
         
     except Exception as e:
         logger.error(f"Portfolio optimization failed: {e}")
