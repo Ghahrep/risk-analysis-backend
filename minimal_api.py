@@ -763,4 +763,6 @@ if __name__ == "__main__":
     logger.info(f"Factor Tools Available: {FACTOR_TOOLS_AVAILABLE}")
     logger.info("=" * 60)
     
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    import os
+    port = int(os.environ.get("PORT", 8001))
+    uvicorn.run(app, host="0.0.0.0", port=port)

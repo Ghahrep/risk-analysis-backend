@@ -18,6 +18,7 @@ statsmodels>=0.14.0
 
 # Financial analysis
 arch>=6.2.0
+hmmlearn>=0.3.0
 
 # Environment
 python-dotenv>=1.0.0
