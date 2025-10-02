@@ -179,7 +179,17 @@ def main():
                         ),
                         error_context="bias detection"
                     )
-    
+
+                    if result:
+                        st.session_state['bias_result'] = result
+                        st.session_state.conversation_history.append({
+                            "role": "assistant",
+                            "content": "Analysis complete"
+                        })
+                        st.success("✓ Analysis complete!")
+                        time.sleep(0.5)
+                        st.rerun()
+                    
     # Display results
     if 'bias_result' in st.session_state:
         result = st.session_state['bias_result']
