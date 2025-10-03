@@ -157,67 +157,62 @@ class FamaFrenchDataFetcher:
     
     def _process_fama_french_data(self, df: pd.DataFrame, model_type: str) -> pd.DataFrame:
         """Process raw Fama-French CSV data"""
+        # Debug: print columns
+        logger.info(f"Ken French CSV columns: {df.columns.tolist()}")
+        
         # First column is date (YYYYMMDD format)
+        # Handle case where column names have leading/trailing spaces
+        df.columns = df.columns.str.strip()
+        
         date_col = df.columns[0]
         
         # Convert date column to datetime
-        df['date'] = pd.to_datetime(df[date_col].astype(str), format='%Y%m%d', errors='coerce')
+        try:
+            df['date'] = pd.to_datetime(df[date_col].astype(str), format='%Y%m%d', errors='coerce')
+        except:
+            # Sometimes the date is already clean
+            df['date'] = pd.to_datetime(df[date_col], errors='coerce')
         
         # Remove rows with invalid dates
         df = df.dropna(subset=['date'])
+        
+        if len(df) == 0:
+            raise ValueError("No valid dates found in Ken French data")
+        
         df.set_index('date', inplace=True)
         
-        # Select and rename factor columns based on model type
+        # Select and rename factor columns
         if model_type == "3factor":
-            # Mkt-RF, SMB, HML, RF
-            factor_cols = {
-                'Mkt-RF': 'Market',
-                'SMB': 'SMB', 
-                'HML': 'HML',
-                'RF': 'RF'
-            }
-        else:  # 5factor
-            # Mkt-RF, SMB, HML, RMW, CMA, RF
-            factor_cols = {
-                'Mkt-RF': 'Market',
-                'SMB': 'SMB',
-                'HML': 'HML', 
-                'RMW': 'RMW',
-                'CMA': 'CMA',
-                'RF': 'RF'
-            }
+            factor_cols = {'Mkt-RF': 'Market', 'SMB': 'SMB', 'HML': 'HML', 'RF': 'RF'}
+        else:
+            factor_cols = {'Mkt-RF': 'Market', 'SMB': 'SMB', 'HML': 'HML', 'RMW': 'RMW', 'CMA': 'CMA', 'RF': 'RF'}
         
-        # Select relevant columns (handle different possible column names)
+        # Strip spaces from all column names
+        df.columns = df.columns.str.strip()
+        
+        # Find matching columns (case-insensitive, space-tolerant)
         available_cols = []
+        rename_map = {}
         for orig_col, new_col in factor_cols.items():
-            # Try exact match first
-            if orig_col in df.columns:
-                available_cols.append(orig_col)
-            # Try case-insensitive match
-            else:
-                for col in df.columns:
-                    if col.strip().upper() == orig_col.upper():
-                        available_cols.append(col)
-                        break
+            for df_col in df.columns:
+                if df_col.strip().replace(' ', '').upper() == orig_col.replace('-', '').upper():
+                    available_cols.append(df_col)
+                    rename_map[df_col] = new_col
+                    break
+        
+        if not available_cols:
+            raise ValueError(f"No factor columns found. Available: {df.columns.tolist()}")
         
         df_factors = df[available_cols].copy()
-        
-        # Rename columns
-        rename_map = {}
-        for col in df_factors.columns:
-            for orig, new in factor_cols.items():
-                if col.strip().upper() == orig.upper():
-                    rename_map[col] = new
-                    break
         df_factors.rename(columns=rename_map, inplace=True)
         
         # Convert from percentages to decimals
         for col in df_factors.columns:
             df_factors[col] = pd.to_numeric(df_factors[col], errors='coerce') / 100.0
         
-        # Remove any remaining invalid data
         df_factors = df_factors.dropna()
         
+        logger.info(f"Processed {len(df_factors)} days of Ken French factor data")
         return df_factors
     
     def get_factor_period(self, period: str = "1year", model_type: str = "3factor") -> pd.DataFrame:
