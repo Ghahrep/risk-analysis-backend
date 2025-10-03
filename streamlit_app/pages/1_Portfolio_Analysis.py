@@ -98,19 +98,24 @@ def create_weights_comparison_chart(current_weights, optimized_weights, symbols)
     return fig
 
 def show_trade_breakdown(current_weights, optimized_weights, symbols, portfolio_value=100000):
-    """NEW: Show what trades are needed to move from current to optimized"""
+    """Show what trades are needed to move from current to optimized"""
     st.markdown("### 📋 Trade Breakdown")
     st.caption(f"Based on ${portfolio_value:,.0f} portfolio value")
     
     trades = []
-    for i, symbol in enumerate(symbols):
-        current = current_weights[i]
-        optimized = list(optimized_weights.values())[i]
+    
+    # Convert current_weights to dict if it's a list
+    if isinstance(current_weights, list):
+        current_weights_dict = {sym: wgt for sym, wgt in zip(symbols, current_weights)}
+    else:
+        current_weights_dict = current_weights
+    
+    for symbol in optimized_weights.keys():
+        current = current_weights_dict.get(symbol, 0)
+        optimized = optimized_weights[symbol]
         change = optimized - current
         
         if abs(change) > 0.001:  # Only show meaningful changes
-            current_value = current * portfolio_value
-            optimized_value = optimized * portfolio_value
             trade_value = abs(change * portfolio_value)
             
             trades.append({
@@ -364,59 +369,20 @@ def main():
                 error_context="portfolio optimization"
             )
             
-            # DEBUG OUTPUT
-            st.write("=== DEBUG: Raw API Response ===")
-            st.write("Result type:", type(result))
-            st.write("Result is None:", result is None)
-            if result:
-                st.write("Result keys:", list(result.keys()))
-                st.write("Status:", result.get('status'))
-                st.write("optimized_weights type:", type(result.get('optimized_weights')))
-                st.write("optimized_weights value:", result.get('optimized_weights'))
-                st.write("expected_return:", result.get('expected_return'))
-                st.write("volatility:", result.get('volatility'))
-                st.write("sharpe_ratio:", result.get('sharpe_ratio'))
-                st.write("Full response:", result)
-            st.write("=========================")
-            
             if result:
                 st.session_state['optimization_result'] = result
                 st.session_state['current_symbols'] = symbols
                 st.session_state['current_weights'] = weights
                 save_analysis_timestamp('portfolio_analysis')
-                
-                # DEBUG: Verify session state was set
-                st.write("=== DEBUG: Session State After Save ===")
-                st.write("optimization_result in session_state:", 'optimization_result' in st.session_state)
-                if 'optimization_result' in st.session_state:
-                    stored = st.session_state['optimization_result']
-                    st.write("Stored keys:", list(stored.keys()))
-                    st.write("Stored optimized_weights:", stored.get('optimized_weights'))
-                st.write("=========================")
-                
                 st.success("✓ Optimization complete!")
                 time.sleep(0.5)
                 st.rerun()
             else:
                 st.error("❌ Optimization failed. Try a different period or verify symbols are valid.")
-                st.write("DEBUG: Result was None or False")
     
     # Display optimization results with ACTION BRIDGES
     if 'optimization_result' in st.session_state:
         result = st.session_state['optimization_result']
-        
-        # DEBUG: Check what's in session state
-        st.write("=== DEBUG: Session State Check ===")
-        st.write("Result type:", type(result))
-        st.write("Result keys:", list(result.keys()) if result else "None")
-        if result:
-            st.write("Status:", result.get('status'))
-            st.write("optimized_weights:", result.get('optimized_weights'))
-            st.write("optimized_weights type:", type(result.get('optimized_weights')))
-            st.write("optimized_weights empty?:", not result.get('optimized_weights'))
-            st.write("expected_return:", result.get('expected_return'))
-            st.write("sharpe_ratio:", result.get('sharpe_ratio'))
-        st.write("=========================")
         
         show_last_updated_badge('portfolio_analysis')
         
@@ -425,17 +391,8 @@ def main():
         
         opt_weights = result.get('optimized_weights', {})
         
-        # DEBUG: Check extracted weights
-        st.write("=== DEBUG: Extracted Weights ===")
-        st.write("opt_weights type:", type(opt_weights))
-        st.write("opt_weights value:", opt_weights)
-        st.write("opt_weights length:", len(opt_weights) if opt_weights else 0)
-        st.write("Is empty check (not opt_weights):", not opt_weights)
-        st.write("=========================")
-        
         if not opt_weights:
             st.warning("⚠️ No optimization results available. Try running optimization again.")
-            st.write("DEBUG: Stopped here because opt_weights was empty")
             return
         
         # Performance metrics
