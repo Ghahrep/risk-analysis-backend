@@ -747,6 +747,22 @@ async def risk_attribution_analysis(request: dict):
         if not symbols:
             raise HTTPException(status_code=400, detail="Symbols required")
         
+        # First, get actual portfolio volatility from risk analysis
+        risk_result = await calculate_comprehensive_risk(
+            symbols=symbols,
+            weights={s: w for s, w in zip(symbols, weights)} if weights else None,
+            period=period,
+            use_real_data=True
+        )
+        
+        # Use actual portfolio volatility instead of hardcoded 15%
+        if risk_result.success and risk_result.annualized_volatility:
+            total_risk = risk_result.annualized_volatility  # Already decimal (e.g., 0.25 for 25%)
+            logger.info(f"Using actual portfolio volatility: {total_risk:.4f}")
+        else:
+            total_risk = 0.15
+            logger.warning("Could not calculate actual volatility, using default 15%")
+        
         try:
             results = analyze_factor_exposure(
                 symbols=symbols,
@@ -755,26 +771,33 @@ async def risk_attribution_analysis(request: dict):
                 fmp_api_key=FMP_API_KEY
             )
             
+            logger.info(f"Factor analysis results: {len(results)} symbols analyzed")
+            
             betas = [r.factor_loadings.get('Market', 1.0) for r in results.values()]
             r_squareds = [r.r_squared for r in results.values()]
             
             avg_beta = np.mean(betas)
             avg_r_squared = np.mean(r_squareds)
             
-            total_risk = 0.15  # Already a percentage
+            logger.info(f"Average beta: {avg_beta:.4f}, Average R²: {avg_r_squared:.4f}")
+            
+            # Calculate risk decomposition using actual volatility
             systematic_risk = total_risk * avg_r_squared
             idiosyncratic_risk = total_risk * (1 - avg_r_squared)
             
+            logger.info(f"Risk decomposition: total={total_risk:.4f}, systematic={systematic_risk:.4f}, idiosyncratic={idiosyncratic_risk:.4f}")
+            
         except Exception as e:
-            logger.warning(f"Factor analysis failed: {e}, using estimates")
-            total_risk = 0.15
-            systematic_risk = 0.1125
-            idiosyncratic_risk = 0.0375
+            logger.exception(f"Factor analysis failed: {e}")
+            # Fallback calculations
+            avg_r_squared = 0.75
+            systematic_risk = total_risk * 0.75
+            idiosyncratic_risk = total_risk * 0.25
         
         return {
             "status": "success",
             "risk_attribution": {
-                "total_risk_pct": total_risk,  # No multiplication by 100
+                "total_risk_pct": total_risk,  # Already decimal
                 "systematic_risk_pct": systematic_risk,
                 "idiosyncratic_risk_pct": idiosyncratic_risk,
                 "factor_contributions": {
@@ -787,7 +810,7 @@ async def risk_attribution_analysis(request: dict):
         }
         
     except Exception as e:
-        logger.error(f"Risk attribution failed: {e}")
+        logger.exception(f"Risk attribution failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/performance-attribution")
