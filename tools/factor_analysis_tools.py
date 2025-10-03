@@ -112,30 +112,37 @@ class FamaFrenchDataFetcher:
             with zipfile.ZipFile(io.BytesIO(response.content)) as zf:
                 csv_filename = zf.namelist()[0]
                 with zf.open(csv_filename) as f:
-                    # Ken French files have header rows we need to skip
-                    lines = f.read().decode('utf-8', errors='ignore').split('\n')
+                    content = f.read().decode('utf-8', errors='ignore')
+                    lines = content.split('\n')
                     
-                    # Find start of data (after blank line following header)
-                    data_start = 0
+                    # Find header line (contains "Mkt-RF")
+                    header_line = None
+                    data_start = None
+                    
                     for i, line in enumerate(lines):
-                        if line.strip() == '' and i > 0:
-                            data_start = i + 1
+                        if 'Mkt-RF' in line:
+                            header_line = i
+                            data_start = i + 1  # Data starts on next line
+                            logger.info(f"Found header at line {i}, data starts at line {data_start}")
                             break
                     
-                    # Find end of daily data (before annual/monthly summaries)
+                    if header_line is None:
+                        raise ValueError("Could not find Mkt-RF header in Ken French file")
+                    
+                    # Find end of daily data (before blank line or annual summary)
                     data_end = len(lines)
                     for i in range(data_start, len(lines)):
-                        if lines[i].strip() == '' or not lines[i].strip()[0].isdigit():
+                        line = lines[i].strip()
+                        # Stop at blank lines or when we hit annual summaries
+                        if not line or (line and not line[0].isdigit()):
                             data_end = i
                             break
                     
-                    # Parse data
-                    df = pd.read_csv(
-                        io.StringIO('\n'.join(lines[data_start:data_end])),
-                        skipinitialspace=True
-                    )
-            
-            # Clean and process
+                    # Parse with explicit header
+                    csv_content = '\n'.join([lines[header_line]] + lines[data_start:data_end])
+                    df = pd.read_csv(io.StringIO(csv_content), skipinitialspace=True)
+
+            # Rest of the method stays the same
             df = self._process_fama_french_data(df, model_type)
             
             # Filter by date range
@@ -157,21 +164,15 @@ class FamaFrenchDataFetcher:
     
     def _process_fama_french_data(self, df: pd.DataFrame, model_type: str) -> pd.DataFrame:
         """Process raw Fama-French CSV data"""
-        # Debug: print columns
-        logger.info(f"Ken French CSV columns: {df.columns.tolist()}")
-        
-        # First column is date (YYYYMMDD format)
-        # Handle case where column names have leading/trailing spaces
+        # Strip whitespace from all column names
         df.columns = df.columns.str.strip()
         
+        # First column should be the date (unnamed or empty string after strip)
+        # It should be 8-digit format YYYYMMDD
         date_col = df.columns[0]
         
         # Convert date column to datetime
-        try:
-            df['date'] = pd.to_datetime(df[date_col].astype(str), format='%Y%m%d', errors='coerce')
-        except:
-            # Sometimes the date is already clean
-            df['date'] = pd.to_datetime(df[date_col], errors='coerce')
+        df['date'] = pd.to_datetime(df[date_col].astype(str), format='%Y%m%d', errors='coerce')
         
         # Remove rows with invalid dates
         df = df.dropna(subset=['date'])
@@ -181,29 +182,25 @@ class FamaFrenchDataFetcher:
         
         df.set_index('date', inplace=True)
         
-        # Select and rename factor columns
+        # Define factor column mappings
         if model_type == "3factor":
             factor_cols = {'Mkt-RF': 'Market', 'SMB': 'SMB', 'HML': 'HML', 'RF': 'RF'}
         else:
             factor_cols = {'Mkt-RF': 'Market', 'SMB': 'SMB', 'HML': 'HML', 'RMW': 'RMW', 'CMA': 'CMA', 'RF': 'RF'}
         
-        # Strip spaces from all column names
-        df.columns = df.columns.str.strip()
-        
-        # Find matching columns (case-insensitive, space-tolerant)
-        available_cols = []
+        # Find and rename columns
         rename_map = {}
-        for orig_col, new_col in factor_cols.items():
-            for df_col in df.columns:
-                if df_col.strip().replace(' ', '').upper() == orig_col.replace('-', '').upper():
-                    available_cols.append(df_col)
-                    rename_map[df_col] = new_col
-                    break
+        for col in df.columns:
+            col_stripped = col.strip()
+            if col_stripped in factor_cols:
+                rename_map[col] = factor_cols[col_stripped]
         
-        if not available_cols:
-            raise ValueError(f"No factor columns found. Available: {df.columns.tolist()}")
+        if 'Mkt-RF' not in rename_map.values() and 'Market' not in rename_map.values():
+            logger.error(f"Mkt-RF column not found. Available columns: {df.columns.tolist()}")
+            raise ValueError(f"Mkt-RF column missing. Available: {df.columns.tolist()}")
         
-        df_factors = df[available_cols].copy()
+        # Select and rename
+        df_factors = df[[col for col in df.columns if col in rename_map]].copy()
         df_factors.rename(columns=rename_map, inplace=True)
         
         # Convert from percentages to decimals
@@ -213,6 +210,8 @@ class FamaFrenchDataFetcher:
         df_factors = df_factors.dropna()
         
         logger.info(f"Processed {len(df_factors)} days of Ken French factor data")
+        logger.info(f"Factor columns: {df_factors.columns.tolist()}")
+        
         return df_factors
     
     def get_factor_period(self, period: str = "1year", model_type: str = "3factor") -> pd.DataFrame:
