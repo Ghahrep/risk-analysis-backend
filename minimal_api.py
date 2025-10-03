@@ -425,6 +425,20 @@ async def forecast_volatility(request: dict):
         if not symbols:
             raise HTTPException(status_code=400, detail="Symbols required")
         
+        # GARCH works best with single assets or small portfolios
+        if len(symbols) > 7:
+            logger.warning(f"Portfolio has {len(symbols)} symbols - GARCH forecast unavailable for large portfolios")
+            return {
+                "status": "success",
+                "volatility_forecast": {
+                    "current_volatility": 0.0,
+                    "forecast_mean": 0.0,
+                    "trend": "unavailable",
+                    "message": "Volatility forecast requires portfolios with 7 or fewer holdings"
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+        
         result = await forecast_volatility_garch(
             symbols=symbols,
             forecast_horizon=forecast_horizon,
@@ -434,10 +448,8 @@ async def forecast_volatility(request: dict):
         
         result_clean = convert_numpy_types(result)
         
-        # Ensure proper structure for frontend
         volatility_forecast = result_clean if isinstance(result_clean, dict) else {}
         
-        # Add defaults if missing
         if 'current_volatility' not in volatility_forecast:
             volatility_forecast['current_volatility'] = 0.0
         if 'forecast_mean' not in volatility_forecast:
@@ -453,7 +465,7 @@ async def forecast_volatility(request: dict):
             "timestamp": datetime.now().isoformat()
         }
     
-    except Exception as e:  # ADD THIS BLOCK
+    except Exception as e:
         logger.error(f"Volatility forecast failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
